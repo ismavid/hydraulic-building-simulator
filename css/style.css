@@ -748,3 +748,30 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .valve-floor-row { grid-template-columns: 70px 1fr 50px; }
   .valve-floor-row .floor-p, .valve-floor-row .floor-q { display: none; }
 }
+
+/* ── SVG Hover Highlights (SCADA Interactive Red) ───────────── */
+g.svg-highlight-group line, g.svg-highlight-group rect, g.svg-highlight-group circle {
+  transition: all 0.25s ease;
+}
+g.svg-highlight-group:hover line, g.svg-highlight-group.svg-highlight-active line {
+  stroke: var(--cyan-400) !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.95)) !important;
+}
+g.svg-highlight-group:hover rect, g.svg-highlight-group.svg-highlight-active rect {
+  fill: var(--cyan-950) !important;
+  stroke: var(--cyan-400) !important;
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.5)) !important;
+}
+g.svg-highlight-group:hover circle, g.svg-highlight-group.svg-highlight-active circle {
+  fill: var(--cyan-400) !important;
+  stroke: #ffffff !important;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.95)) !important;
+}
+g.svg-highlight-group:hover text, g.svg-highlight-group.svg-highlight-active text {
+  fill: #ffffff !important;
+  font-weight: 700 !important;
+}
+#segments-body tr {
+  transition: background 0.2s ease;
+}
