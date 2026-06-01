@@ -45,8 +45,17 @@
     </div>
     <div class="card-body open" id="body-building">
       <div class="summary-grid" id="building-summary"></div>
+      <div class="section-label" style="margin-top:20px">Esquema hidráulico del edificio</div>
+      <div id="building-schematic" style="background:white;border:1px solid var(--gray-300);border-radius:var(--r-md);padding:12px;overflow-x:auto"></div>
     </div>
   </div>
+
+  <!-- ══ Botón Ejecutar Todo ══ -->
+  <button id="run-all-btn" class="btn" onclick="runAll()"
+    style="background:linear-gradient(135deg,var(--blue-900),var(--blue-700));color:white;width:100%;padding:14px;font-size:15px;border-radius:var(--r-md);justify-content:center;gap:10px;box-shadow:0 4px 12px rgba(12,35,64,.3)">
+    ▶▶ Ejecutar Todo (HYD-1 → 4)
+    <span style="font-size:12px;opacity:.75;font-weight:400">Calcula todos los módulos con los valores por defecto</span>
+  </button>
 
   <!-- ══ HYD-1: Pérdidas hidráulicas ══ -->
   <div class="card" id="card-hyd1">
@@ -96,6 +105,17 @@
           <tbody id="segments-body"></tbody>
         </table>
       </div>
+
+      <details class="eq-details">
+        <summary>📐 Ecuaciones aplicadas (HYD-1)</summary>
+        <pre class="eq-block">Velocidad:        v = Q / A = Q / (π·D²/4)
+Reynolds:         Re = ρ·v·D / μ
+Colebrook-White:  1/√f = −2·log₁₀( ε/(3.7·D) + 2.51/(Re·√f) )   [iterativo N-R]
+  Laminar (Re&lt;2300):  f = 64/Re
+Darcy-Weisbach:   hf = f · (L/D) · v²/(2g)
+Pérdidas menores: hm = ΣK · v²/(2g)
+Total tramo:      h_t = hf + hm</pre>
+      </details>
 
       <button class="btn btn-primary" onclick="runHyd1()">▶ Ejecutar HYD-1</button>
       <div id="hyd1-output" style="margin-top:20px;display:none">
@@ -155,6 +175,19 @@
         </div>
       </div>
 
+      <details class="eq-details">
+        <summary>📐 Ecuaciones aplicadas (HYD-2)</summary>
+        <pre class="eq-block">TDH = Δz + Σhf + Σhm + P_req
+  donde P_req = presión mínima requerida en punto de entrega [m c.a.]
+
+P_hidráulica = Q · ρ · g · TDH                              [W]
+P_freno = P_hid / η                                          [W]  →  ÷ 745.7 = HP
+
+NPSH_d = P_atm/(ρ·g) + Δz_succ − hf_succ − P_vapor/(ρ·g)  [m]
+  Bogotá: P_atm = 74,660 Pa → 7.61 m c.a.
+  Agua 15°C: P_vapor = 1,705 Pa → 0.174 m c.a.</pre>
+      </details>
+
       <button class="btn btn-teal" onclick="runHyd2()">▶ Ejecutar HYD-2</button>
       <div id="hyd2-output" style="margin-top:20px;display:none">
         <div id="hyd2-kpis" class="kpi-grid"></div>
@@ -212,6 +245,18 @@
           <tbody id="hourly-body"></tbody>
         </table>
       </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span id="hourly-pct-badge" class="pct-badge pct-ok">Σ = 100%</span>
+        <span style="font-size:12px;color:var(--gray-500)">La suma de porcentajes debe ser exactamente 100%.</span>
+      </div>
+
+      <details class="eq-details">
+        <summary>📐 Ecuaciones aplicadas (HYD-3)</summary>
+        <pre class="eq-block">Q_franja = (% × Q_diario) / (duración_h × 3600)              [L/s promedio]
+Pérdidas(Q) = Pérdidas_ref × (Q/Q_ref)²                      [escalado cuadrático, régimen turbulento]
+P_piso5 = TDH_bomba − Δz − Pérdidas(Q)                       [m c.a.]
+Estado: ✓ si P_piso5 ≥ P_mín_requerida (10 m c.a.)</pre>
+      </details>
 
       <button class="btn btn-green" onclick="runHyd3()">▶ Ejecutar HYD-3</button>
       <div id="hyd3-output" style="margin-top:20px;display:none">
