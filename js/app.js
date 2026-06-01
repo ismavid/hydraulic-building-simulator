@@ -1,5 +1,5 @@
 /**
- * app.js — Simulador Hidráulico UI
+ * app.js — Simulador Hidráulico UI (SCADA Dark Mode Sobrio)
  * Proyecto Final Fenómenos de Transporte — U. de La Sabana, 2026
  */
 'use strict';
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHourlyTable();
   renderPricesTable();
 
-  // Building schematic
+  // Building schematic SVG
   const schEl = document.getElementById('building-schematic');
   if (schEl) schEl.innerHTML = svgBuildingSchematic();
 
@@ -79,6 +79,32 @@ document.addEventListener('DOMContentLoaded', () => {
   updateHourlyBadge();
   document.getElementById('hourly-body')?.addEventListener('input', updateHourlyBadge);
 });
+
+// Tab Switcher for Planos
+window.switchTab = function(tabId) {
+  // Hide all tab panes
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.style.display = 'none';
+  });
+  
+  // Show active pane
+  const activePane = document.getElementById(tabId);
+  if (activePane) {
+    activePane.style.display = (tabId === 'tab-esquema') ? 'block' : 'flex';
+  }
+
+  // Toggle active class on tab buttons
+  document.querySelectorAll('.blueprint-tab').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  const activeBtn = document.getElementById('btn-' + tabId);
+  if (activeBtn) {
+    activeBtn.classList.add('active');
+  }
+  
+  showToast(`Vista de planos: ${tabId === 'tab-general' ? 'Plano General' : tabId === 'tab-planta' ? 'Planta por Piso' : 'Esquema SVG'}`);
+};
 
 function renderBuildingSummary() {
   const items = [
@@ -124,7 +150,7 @@ function renderHourlyTable() {
       <td style="color:var(--gray-500)">${h.horas}</td>
       <td><input type="number" data-hour="${idx}" data-field="dur" value="${h.dur}" step="0.5" style="width:55px"></td>
       <td><input type="number" data-hour="${idx}" data-field="pct" value="${h.pct}" step="0.01" min="0" max="1" style="width:65px"></td>
-      <td><span class="badge ${h.tipo==='Pico'?'badge-blue':'badge-teal'}" style="font-size:11px">${h.tipo}</span></td>
+      <td><span class="badge ${h.tipo==='Pico'?'badge-blue':'badge-teal'}" style="font-size:10px">${h.tipo}</span></td>
     </tr>`
   ).join('');
 }
@@ -191,7 +217,7 @@ function toggleCard(header) {
   if (!body) return;
   const isOpen = body.classList.toggle('open');
   header.classList.toggle('open', isOpen);
-  btn.textContent = isOpen ? '▲ Colapsar' : '▼ Expandir';
+  if (btn) btn.textContent = isOpen ? '▲ Colapsar' : '▼ Expandir';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -219,7 +245,7 @@ function runHyd1() {
   results.forEach((r, i) => {
     const seg = segments[i];
     const vClass = r.velWarn === 'low' ? 'warn-low' : r.velWarn === 'high' ? 'warn-high' : 'ok';
-    const statusIcon = r.velWarn === 'low' ? '⚠ v baja' : r.velWarn === 'high' ? '✗ v alta' : '✓';
+    const statusIcon = r.velWarn === 'low' ? '⚠ v baja' : r.velWarn === 'high' ? '✗ v alta' : '✓ OK';
     if (r.velWarn === 'low')  alerts.push(`⚠ ${seg.id}: velocidad baja (${r.v.toFixed(3)} m/s < 0.5 m/s) — aceptable en ramales de baja demanda.`);
     if (r.velWarn === 'high') alerts.push(`✗ ${seg.id}: velocidad excede NTC 1500 (${r.v.toFixed(3)} m/s > 2.5 m/s) — aumente diámetro.`);
     tableHtml += `<tr>
@@ -228,7 +254,7 @@ function runHyd1() {
       <td class="${vClass}">${r.v.toFixed(3)}</td>
       <td>${Math.round(r.Re).toLocaleString()}</td>
       <td style="font-size:11px;color:var(--gray-500)">${r.regime}</td>
-      <td style="font-family:var(--font-mono)">${r.f.toFixed(5)}</td>
+      <td style="font-family:var(--font-mono);color:var(--cyan-400)">${r.f.toFixed(5)}</td>
       <td>${r.hf.toFixed(4)}</td>
       <td>${seg.K_total.toFixed(1)}</td>
       <td>${r.hm.toFixed(4)}</td>
@@ -240,7 +266,7 @@ function runHyd1() {
     <td colspan="6">Σ Pérdidas totales</td>
     <td>${totalHf.toFixed(4)}</td><td>—</td>
     <td>${totalHm.toFixed(4)}</td>
-    <td><strong>${totalH.toFixed(4)}</strong></td><td></td>
+    <td style="color:var(--cyan-400)"><strong>${totalH.toFixed(4)}</strong></td><td></td>
   </tr></tfoot></table>`;
   document.getElementById('hyd1-results-wrap').innerHTML = tableHtml;
 
@@ -257,7 +283,7 @@ function runHyd1() {
       v1: r.hf, v2: r.hm,
       total: r.ht,
     })),
-    { label1:'Fricción (hf)', label2:'Menores (hm)', color1:'#1e6dbf', color2:'#d4670a', width:700, height:260 }
+    { label1:'Fricción (hf)', label2:'Accesorios (hm)', color1:'#06b6d4', color2:'#f59e0b', width:700, height:260 }
   );
 
   // ── Gradient line ──
@@ -265,6 +291,7 @@ function runHyd1() {
   document.getElementById('hyd1-chart-gradient').innerHTML = svgGradientLine(results, segments, startHead);
 
   document.getElementById('hyd1-output').style.display = 'block';
+  document.getElementById('card-hyd1').classList.add('card-active');
   showToast('HYD-1 calculado — pérdidas totales: ' + totalH.toFixed(3) + ' m');
 }
 
@@ -294,11 +321,11 @@ function runHyd2() {
 
   // ── KPIs ──
   document.getElementById('hyd2-kpis').innerHTML = [
-    { label:'TDH', value: TDH.toFixed(2), unit:'m c.a.', cls:'kpi-blue' },
+    { label:'TDH (Cabeza total)', value: TDH.toFixed(2), unit:'m c.a.', cls:'kpi-blue' },
     { label:'P. hidráulica', value: (P_hyd/1000).toFixed(3), unit:'kW', cls:'kpi-teal' },
-    { label:'P. al freno', value: P_hp.toFixed(3), unit:'HP requeridos', cls:'kpi-orange' },
+    { label:'Potencia Freno', value: P_hp.toFixed(3), unit:'HP requeridos', cls:'kpi-orange' },
     { label:'Bomba comercial', value: pump.label, unit:'centrífuga', cls:'kpi-green' },
-    { label:'NPSH disponible', value: NPSH.toFixed(2), unit:'m', cls: NPSH < 3 ? 'kpi-red' : 'kpi-green' },
+    { label:'NPSH disponible', value: NPSH.toFixed(2), unit:'m (Bogotá)', cls: NPSH < 3 ? 'kpi-red' : 'kpi-green' },
     { label:'Eficiencia η', value: (eta*100).toFixed(0), unit:'%', cls:'kpi-blue' },
   ].map(k => `<div class="kpi-card ${k.cls}">
     <div class="kpi-label">${k.label}</div>
@@ -308,47 +335,48 @@ function runHyd2() {
 
   // ── Alerts ──
   const alertsHtml = [
-    NPSH < 3 ? '<div class="alert alert-error">⚠ NPSH disponible < 3 m — riesgo de cavitación. Revisar instalación de succión.</div>' : '',
-    TDH > 30 ? '<div class="alert alert-warn">ℹ TDH > 30 m — verificar selección de bomba multietapa si es necesario.</div>' : '',
-    '<div class="alert alert-success">✓ Bomba ' + pump.label + ' centrífuga es suficiente para abastecer el Piso 5.</div>',
+    NPSH < 3 ? '<div class="alert alert-error">⚠ NPSH disponible < 3 m — riesgo latente de cavitación. Revisar instalación de succión.</div>' : '',
+    TDH > 30 ? '<div class="alert alert-warn">ℹ TDH > 30 m — verificar viabilidad de selección multietapa comercial.</div>' : '',
+    '<div class="alert alert-success">✓ La bomba comercial de ' + pump.label + ' es suficiente para abastecer el Piso 5.</div>',
   ].join('');
   document.getElementById('hyd2-alerts').innerHTML = alertsHtml;
 
   // ── Donut chart ──
   const slices = state.hyd1
     ? [
-        { label:'Altura estática', value: dz,                  color:'#1a4a7a' },
-        { label:'Pérd. fricción',  value: state.hyd1.totalHf,  color:'#1e6dbf' },
-        { label:'Pérd. menores',   value: state.hyd1.totalHm,  color:'#2e86de' },
-        { label:'Presión req.',    value: pReq,                 color:'#0d8a8a' },
+        { label:'Alt. estática', value: dz,                  color:'#0c2340' },
+        { label:'Pérd. fricción',  value: state.hyd1.totalHf,  color:'#06b6d4' },
+        { label:'Pérd. menores',   value: state.hyd1.totalHm,  color:'#3b82f6' },
+        { label:'Presión req.',    value: pReq,                 color:'#0d9488' },
       ]
     : [
-        { label:'Altura estática', value: dz,     color:'#1a4a7a' },
-        { label:'Pérd. totales',   value: losses,  color:'#1e6dbf' },
-        { label:'Presión req.',    value: pReq,    color:'#0d8a8a' },
+        { label:'Alt. estática', value: dz,     color:'#0c2340' },
+        { label:'Pérd. totales',   value: losses,  color:'#06b6d4' },
+        { label:'Presión req.',    value: pReq,    color:'#0d9488' },
       ];
-  const donutNote = state.hyd1 ? '' : '<div class="alert alert-info" style="margin-top:8px;font-size:12px">ℹ Ejecute HYD-1 para ver desglose fricción vs pérdidas menores.</div>';
+  const donutNote = state.hyd1 ? '' : '<div class="alert alert-info" style="margin-top:8px;font-size:12px">ℹ Ejecute HYD-1 para ver desglose de fricción vs pérdidas menores.</div>';
   document.getElementById('hyd2-chart-donut').innerHTML = svgDonut(slices, TDH, 220, 220) + donutNote;
 
   // ── Pump card ──
   document.getElementById('hyd2-pump-card').innerHTML = `
-    <div style="background:var(--blue-900);color:white;border-radius:var(--r-lg);padding:20px">
-      <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Bomba Recomendada</div>
-      <div style="font-size:32px;font-weight:700;letter-spacing:-1px">${pump.label}</div>
-      <div style="font-size:14px;opacity:.8;margin-top:4px">Centrífuga monoetapa</div>
-      <div style="margin-top:16px;display:flex;flex-direction:column;gap:6px;font-size:13px">
-        <div>TDH = <strong>${TDH.toFixed(2)} m</strong></div>
-        <div>Q = <strong>${Q_ls.toFixed(3)} L/s</strong></div>
-        <div>P freno = <strong>${P_hp.toFixed(3)} HP</strong></div>
-        <div>NPSH disp. = <strong>${NPSH.toFixed(2)} m</strong></div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.2)">
-          Precio ref. = <strong>${fmt(pump.cost)} COP</strong>
+    <div style="background: linear-gradient(135deg, #0f172a, #0b0f19); color:white; border-radius:var(--r-lg); border:1px solid var(--border-glow); box-shadow: var(--shadow-glow); padding:20px">
+      <div style="font-size:9.5px; opacity:.7; text-transform:uppercase; letter-spacing:1px; color:var(--cyan-400); margin-bottom:8px">Especificación Comercial</div>
+      <div style="font-family:var(--font-title); font-size:30px; font-weight:700; letter-spacing:-1px">${pump.label}</div>
+      <div style="font-size:12.5px; opacity:.8; margin-top:2px">Bomba Centrífuga Pedrollo o similar</div>
+      <div style="margin-top:16px; display:flex; flex-direction:column; gap:6px; font-size:12.5px; font-family:var(--font-mono)">
+        <div>TDH = <span style="color:var(--white); font-weight:600">${TDH.toFixed(2)} m</span></div>
+        <div>Q max = <span style="color:var(--cyan-400); font-weight:600">${Q_ls.toFixed(3)} L/s</span></div>
+        <div>P freno = <span style="color:var(--orange-400); font-weight:600">${P_hp.toFixed(3)} HP</span></div>
+        <div>NPSH disp. = <span style="color:var(--green-400); font-weight:600">${NPSH.toFixed(2)} m</span></div>
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border-subtle); font-family:var(--font-sans)">
+          Precio ref. = <span style="color:var(--white); font-weight:600">${fmt(pump.cost)} COP</span>
         </div>
       </div>
     </div>`;
 
   document.getElementById('hyd2-output').style.display = 'block';
-  showToast('HYD-2 calculado — TDH: ' + TDH.toFixed(2) + ' m, Bomba: ' + pump.label);
+  document.getElementById('card-hyd2').classList.add('card-active');
+  showToast('HYD-2 calculado — TDH: ' + TDH.toFixed(2) + ' m, Bomba comercial: ' + pump.label);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -378,9 +406,9 @@ function runHyd3() {
   // ── Table ──
   let tHtml = `<table class="hourly-table">
     <thead><tr>
-      <th>Franja</th><th>Horas</th><th>Q (L/s)</th>
+      <th>Franja Horaria</th><th>Horas</th><th>Q (L/s)</th>
       <th>v montante (m/s)</th><th>Pérdidas (m)</th>
-      <th>P piso 5 (m.c.a.)</th><th>Estado</th>
+      <th>P piso 5 (m.c.a.)</th><th>Estado SCADA</th>
     </tr></thead><tbody>`;
   rows.forEach(r => {
     const cls = r.tipo === 'Pico' ? 'peak' : '';
@@ -392,7 +420,7 @@ function runHyd3() {
       <td>${r.v_mont.toFixed(3)}</td>
       <td>${r.losses.toFixed(4)}</td>
       <td class="${okCls}">${r.P5.toFixed(3)}</td>
-      <td class="${okCls}">${r.ok ? '✓ OK' : '✗ Insuficiente'}</td>
+      <td class="${okCls}">${r.ok ? '✓ OPERATIVO' : '✗ ALARMA DE PRESIÓN'}</td>
     </tr>`;
   });
   tHtml += '</tbody></table>';
@@ -402,19 +430,15 @@ function runHyd3() {
   renderValvePanel(TDH, dz, href, Qref, Pmin);
 
   document.getElementById('hyd3-output').style.display = 'block';
-  showToast('HYD-3 calculado — ' + rows.filter(r=>r.ok).length + '/7 franjas con presión suficiente');
+  document.getElementById('card-hyd3').classList.add('card-active');
+  showToast('HYD-3 calculado — ' + rows.filter(r=>r.ok).length + '/7 franjas operativas');
 }
 
 // ── Valve panel (interactive) ─────────────────────────────────
 function renderValvePanel(TDH, dz, href, Qref, Pmin) {
   const floors = [5,4,3,2,1];
-  // Pressure at each floor without valve restrictions
-  // Assume each floor taps ~20% of Q_design from the riser
-  const Q_design = Qref;
-
   let html = '';
   floors.forEach(f => {
-    const hPiso = (f-1) * 2.8 + 3.5; // elevation of this floor
     html += `<div class="valve-floor-row" id="vrow-${f}">
       <span class="floor-label">Piso ${f}</span>
       <input type="range" id="valve-${f}" min="0" max="100" value="100" step="5"
@@ -425,7 +449,8 @@ function renderValvePanel(TDH, dz, href, Qref, Pmin) {
     </div>`;
   });
   document.getElementById('valve-rows').innerHTML = html;
-  // Initial calc
+  
+  // Initial calculation
   updateValveAll(TDH, dz, href, Qref, Pmin);
 }
 
@@ -456,7 +481,26 @@ function updateValveAll(TDH, dz, href, Qref, Pmin) {
     if (qEl) qEl.textContent = r.Q_floor.toFixed(3) + ' L/s';
     if (pEl) {
       pEl.textContent = r.P.toFixed(2) + ' m';
-      pEl.style.color = r.ok ? 'var(--green-500)' : 'var(--red-500)';
+      pEl.style.color = r.ok ? 'var(--green-400)' : 'var(--red-400)';
+    }
+
+    // Update SCADA facade building floors & LEDs
+    const ledEl = document.getElementById(`led-floor-${r.f}`);
+    const floorDiv = document.getElementById(`ffloor-${r.f}`);
+    if (ledEl && floorDiv) {
+      // Clear classes
+      ledEl.className = 'facade-led';
+      floorDiv.classList.remove('active-floor');
+      
+      if (r.apertura === 0 || r.P <= 0) {
+        // Red LED (default) & not active
+      } else if (r.ok) {
+        ledEl.classList.add('led-ok');
+        floorDiv.classList.add('active-floor');
+      } else {
+        ledEl.classList.add('led-warn');
+        floorDiv.classList.add('active-floor');
+      }
     }
   });
 
@@ -480,8 +524,6 @@ function runHyd4() {
       subtotal = p.price * nPoints;
     } else if (p.item === 'Tanque 23 m³') {
       subtotal = p.price * 1;
-    } else if (p.item.startsWith('Tubería') || p.item.startsWith('Válvula') || p.item.startsWith('Codo') || p.item.startsWith('Tee') || p.item.startsWith('Redu')) {
-      subtotal = p.price * p.qty;
     } else {
       subtotal = p.price * p.qty;
     }
@@ -489,7 +531,6 @@ function runHyd4() {
   });
 
   // Override pump line with selected pump cost
-  // Find pump item or add it
   let pumpLine = breakdown.find(b => b.item.includes('Tanque') === false && b.item.toLowerCase().includes('bomba'));
   if (!pumpLine) {
     breakdown.push({ item: `Bomba ${pump.label} centrífuga`, unit:'u', price:pump.cost, qty:1, subtotal:pump.cost });
@@ -505,27 +546,27 @@ function runHyd4() {
 
   // ── Table ──
   let tHtml = `<table>
-    <thead><tr><th>Ítem</th><th>Und.</th><th>Precio unit. (COP)</th><th>Cantidad</th><th>Subtotal (COP)</th><th>%</th></tr></thead>
+    <thead><tr><th>Material / Item</th><th>Und.</th><th>Precio unit. (COP)</th><th>Cantidad</th><th>Subtotal (COP)</th><th>%</th></tr></thead>
     <tbody>`;
   breakdown.forEach(b => {
     tHtml += `<tr>
-      <td>${b.item}</td>
+      <td><strong>${b.item}</strong></td>
       <td style="color:var(--gray-500)">${b.unit}</td>
       <td style="font-family:var(--font-mono)">${fmt(b.price)}</td>
       <td>${b.qty}</td>
-      <td style="font-family:var(--font-mono);font-weight:600">${fmt(b.subtotal)}</td>
-      <td style="color:var(--gray-500)">${((b.subtotal/total)*100).toFixed(1)}%</td>
+      <td style="font-family:var(--font-mono);font-weight:600;color:var(--white)">${fmt(b.subtotal)}</td>
+      <td style="color:var(--cyan-400)">${((b.subtotal/total)*100).toFixed(1)}%</td>
     </tr>`;
   });
   tHtml += `</tbody><tfoot><tr>
-    <td colspan="4"><strong>TOTAL</strong></td>
-    <td style="font-family:var(--font-mono)"><strong>${fmt(total)}</strong></td>
+    <td colspan="4"><strong>PRESUPUESTO TOTAL GENERAL</strong></td>
+    <td style="font-family:var(--font-mono);color:var(--white)"><strong>${fmt(total)}</strong></td>
     <td></td>
   </tr></tfoot></table>`;
   document.getElementById('hyd4-results-wrap').innerHTML = tHtml;
 
   // ── Donut ──
-  const colorPalette = ['#0c2340','#1a4a7a','#1e6dbf','#2e86de','#0d8a8a','#1a8a4a','#d4670a','#c0392b'];
+  const colorPalette = ['#0c2340','#06b6d4','#3b82f6','#10b981','#f59e0b','#ef4444','#0d9488','#1e293b'];
   const grouped = groupCostItems(breakdown);
   document.getElementById('hyd4-chart-donut').innerHTML = svgDonut(
     grouped.map((g, i) => ({ label: g.label, value: g.total, color: colorPalette[i % colorPalette.length] })),
@@ -535,18 +576,19 @@ function runHyd4() {
   // ── Total cards ──
   document.getElementById('hyd4-totals').innerHTML = `
     <div class="cost-total-card">
-      <div class="label">Costo total del sistema</div>
-      <div class="big-number" style="margin:12px 0">${fmt(total)}</div>
-      <div style="font-size:13px;opacity:.7">COP (pesos colombianos)</div>
+      <div class="label">Costo Total Red Hidráulica</div>
+      <div class="big-number" style="margin:12px 0; color:var(--cyan-400);">${fmt(total)}</div>
+      <div style="font-size:12px;opacity:.7">COP (pesos colombianos)</div>
     </div>
-    <div class="cost-total-card" style="background:linear-gradient(135deg,var(--teal-500),var(--blue-700))">
-      <div class="label">Costo por apartamento</div>
-      <div class="big-number" style="margin:12px 0">${fmt(Math.round(perApto))}</div>
-      <div style="font-size:13px;opacity:.7">COP · 15 apartamentos</div>
+    <div class="cost-total-card" style="background: linear-gradient(180deg, #0f272a, #0b1329);">
+      <div class="label">Inversión por Apartamento</div>
+      <div class="big-number" style="margin:12px 0; color:var(--green-400);">${fmt(Math.round(perApto))}</div>
+      <div style="font-size:12px;opacity:.7">COP · Dividido en 15 apartamentos</div>
     </div>`;
 
   document.getElementById('hyd4-output').style.display = 'block';
-  showToast('HYD-4 calculado — Total: ' + fmt(total) + ' COP');
+  document.getElementById('card-hyd4').classList.add('card-active');
+  showToast('HYD-4 presupuestado — Costo total: ' + fmt(total) + ' COP');
 }
 
 function groupCostItems(breakdown) {
@@ -570,90 +612,97 @@ function doExport() {
   const lines = [];
   const now = new Date().toLocaleDateString('es-CO', {year:'numeric',month:'long',day:'numeric'});
 
-  lines.push('=== RESULTADOS DEL ANÁLISIS HIDRÁULICO ===');
-  lines.push('Proyecto: Sistema Hidráulico — Edificio Residencial 5 Pisos, Bogotá D.C.');
+  lines.push('=========================================================================');
+  lines.push('=== REPORTE TÉCNICO DE MEMORIA HIDRÁULICA — PROYECTO FINAL EDIFICIO ===');
+  lines.push('=========================================================================');
+  lines.push('Proyecto: Red de Suministro Hidráulico — Edificio de 5 Pisos, Bogotá D.C.');
   lines.push(`Fecha: ${now}`);
-  lines.push('Autores: M.A. Casas · L.F. Lasso · I.D. Lora · N. Valencia');
-  lines.push('Universidad de La Sabana — Ing. Química — Fenómenos de Transporte 2026');
+  lines.push('Diseñadores: M.A. Casas Sierra · L.F. Lasso González · I.D. Lora García · N. Valencia Toledo');
+  lines.push('Universidad de La Sabana — Ingeniería Química — Fenómenos de Transporte 2026');
+  lines.push('Docente: Sandra Rodríguez');
   lines.push('');
 
-  lines.push('── PARÁMETROS DEL EDIFICIO ──────────────────────────────────────────────');
-  lines.push('Pisos: 5 | Aptos/piso: 3 | Personas/apto: 3 | Total: 45 hab.');
-  lines.push('Consumo per cápita: 140 L/hab·día | Consumo total: 6,300 L/día');
-  lines.push('Tanque de almacenamiento: 22,680 L (3 días + 20% seg.)');
-  lines.push('Caudal de diseño: 2.30 L/s (225 UH → tabla Hunter / NTC 1500)');
-  lines.push('Agua @ 15°C: ρ = 999.1 kg/m³, μ = 1.138×10⁻³ Pa·s');
-  lines.push('Altitud Bogotá: 2,640 m.s.n.m. | P_atm = 74.66 kPa');
+  lines.push('── 1. PARÁMETROS BASE DEL EDIFICIO ──────────────────────────────────────');
+  lines.push('Población residencial: 15 Apartamentos · 3 Hab/Apto = 45 habitantes.');
+  lines.push('Consumo diario estimado: 140 L/hab·día | Consumo diario total: 6,300 L/día.');
+  lines.push('Capacidad del tanque de almacenamiento: 22,680 L (Margen de contingencia 3 días + 20% seg).');
+  lines.push('Caudal de diseño (Método de Unidades Hunter / NTC 1500): 2.30 L/s (225 UH).');
+  lines.push('Propiedades del fluido (Agua a 15°C): ρ = 999.1 kg/m³, μ = 1.138×10⁻³ Pa·s.');
+  lines.push('Ubicación: Bogotá D.C. (Altitud 2,640 m.s.n.m.) | P_atmosférica = 74.66 kPa.');
   lines.push('');
 
   if (state.hyd1) {
-    lines.push('── PÉRDIDAS POR TRAMO (HYD-1) ──────────────────────────────────────────');
+    lines.push('── 2. ANÁLISIS DE PÉRDIDAS EN TUBERÍAS Y ACCESORIOS (HYD-1) ─────────────');
+    lines.push('Ecuaciones de Darcy-Weisbach y Colebrook-White (Iteración de Newton-Raphson)');
+    lines.push('');
     lines.push('Tramo  | Q (L/s) | v (m/s) |   Re    |   f      | hf (m)  | ΣK  | hm (m)  | h_total (m)');
-    lines.push('-'.repeat(90));
+    lines.push('-'.repeat(95));
     state.hyd1.results.forEach((r, i) => {
       const s = DEFAULT_SEGMENTS[i];
       lines.push(
         `${s.id.padEnd(6)} | ${s.Q_ls.toFixed(3).padStart(7)} | ${r.v.toFixed(3).padStart(7)} | ${Math.round(r.Re).toLocaleString().padStart(7)} | ${r.f.toFixed(5)} | ${r.hf.toFixed(4).padStart(7)} | ${s.K_total.toFixed(1).padStart(3)} | ${r.hm.toFixed(4).padStart(7)} | ${r.ht.toFixed(4)}`
       );
     });
-    lines.push('-'.repeat(90));
+    lines.push('-'.repeat(95));
     lines.push(`${'TOTAL'.padEnd(6)} |         |         |         |          | ${state.hyd1.totalHf.toFixed(4).padStart(7)} |     | ${state.hyd1.totalHm.toFixed(4).padStart(7)} | ${state.hyd1.totalH.toFixed(4)}`);
     lines.push('');
   }
 
   if (state.hyd2) {
-    lines.push('── DIMENSIONAMIENTO DE BOMBA (HYD-2) ───────────────────────────────────');
-    lines.push(`Altura estática Δz          = ${state.hyd2.dz.toFixed(2)} m`);
-    lines.push(`Pérdidas totales del sistema = ${state.hyd2.losses.toFixed(4)} m`);
-    lines.push(`Presión requerida piso 5     = ${state.hyd2.pReq.toFixed(2)} m.c.a.`);
-    lines.push(`TDH (Cabeza Dinámica Total)  = ${state.hyd2.TDH.toFixed(3)} m`);
-    lines.push(`Potencia hidráulica          = ${(state.hyd2.P_hyd/1000).toFixed(3)} kW`);
-    lines.push(`Potencia al freno (η=${state.hyd2.eta}) = ${state.hyd2.P_hp.toFixed(4)} HP requeridos`);
-    lines.push(`Bomba seleccionada           = ${state.hyd2.pump.label} centrífuga`);
-    lines.push(`NPSH disponible              = ${state.hyd2.NPSH.toFixed(3)} m`);
+    lines.push('── 3. ESPECIFICACIÓN Y DIMENSIONAMIENTO DE LA BOMBA (HYD-2) ─────────────');
+    lines.push(`Altura geométrica estática (Δz)  = ${state.hyd2.dz.toFixed(2)} m`);
+    lines.push(`Pérdidas acumuladas del sistema  = ${state.hyd2.losses.toFixed(4)} m`);
+    lines.push(`Presión residual mínima Piso 5   = ${state.hyd2.pReq.toFixed(2)} m.c.a. (NTC 1500)`);
+    lines.push(`Cabeza Dinámica Total (TDH)      = ${state.hyd2.TDH.toFixed(3)} m`);
+    lines.push(`Potencia Hidráulica del Sistema  = ${(state.hyd2.P_hyd/1000).toFixed(3)} kW`);
+    lines.push(`Potencia al Freno (Eficiencia η=${state.hyd2.eta}) = ${state.hyd2.P_hp.toFixed(4)} HP`);
+    lines.push(`Recomendación comercial          = Bomba Centrífuga de ${state.hyd2.pump.label}`);
+    lines.push(`NPSH Disponible (en Bogotá)      = ${state.hyd2.NPSH.toFixed(3)} m c.a.`);
     lines.push('');
-    lines.push(`VERIFICACIÓN: TDH = Δz + Σpérd + P_req`);
-    lines.push(`  ${state.hyd2.TDH.toFixed(3)} = ${state.hyd2.dz.toFixed(2)} + ${state.hyd2.losses.toFixed(4)} + ${state.hyd2.pReq.toFixed(2)}`);
+    lines.push(`Ecuación de balance energético (TDH):`);
+    lines.push(`  TDH = Δz + Σpérdidas + P_entrega`);
+    lines.push(`  ${state.hyd2.TDH.toFixed(3)} m = ${state.hyd2.dz.toFixed(2)} m + ${state.hyd2.losses.toFixed(4)} m + ${state.hyd2.pReq.toFixed(2)} m`);
     lines.push('');
   }
 
   if (state.hyd3) {
-    lines.push('── SIMULACIÓN HORARIA (HYD-3) ──────────────────────────────────────────');
-    lines.push('Franja            | Horas | Q (L/s) | Pérdidas (m) | P_piso5 (m.c.a.) | Estado');
+    lines.push('── 4. VERIFICACIÓN OPERATIVA POR FRANJA HORARIA (HYD-3) ─────────────────');
+    lines.push('Franja            | Horas | Q (L/s) | Pérdidas (m) | P_piso 5 (mca)  | Estado');
     lines.push('-'.repeat(80));
     state.hyd3.rows.forEach(r => {
-      lines.push(`${r.label.padEnd(17)} | ${r.horas.padEnd(5)} | ${r.Q.toFixed(3).padStart(7)} | ${r.losses.toFixed(4).padStart(12)} | ${r.P5.toFixed(3).padStart(16)} | ${r.ok?'✓ OK':'✗ Insuficiente'}`);
+      lines.push(`${r.label.padEnd(17)} | ${r.horas.padEnd(5)} | ${r.Q.toFixed(3).padStart(7)} | ${r.losses.toFixed(4).padStart(12)} | ${r.P5.toFixed(3).padStart(16)} | ${r.ok?'OPERATIVO ✓':'PRESIÓN ALTA ✗'}`);
     });
     lines.push('');
   }
 
   if (state.hyd4) {
-    lines.push('── ESTIMACIÓN DE COSTOS (HYD-4) ────────────────────────────────────────');
+    lines.push('── 5. ANÁLISIS FINANCIERO Y PRESUPUESTO COMERCIAL (HYD-4) ───────────────');
     const groups = groupCostItems(state.hyd4.breakdown);
     groups.forEach(g => lines.push(`  ${g.label.padEnd(15)}: ${fmt(g.total).padStart(18)} COP  (${((g.total/state.hyd4.total)*100).toFixed(1)}%)`));
     lines.push('-'.repeat(52));
-    lines.push(`  ${'TOTAL'.padEnd(15)}: ${fmt(state.hyd4.total).padStart(18)} COP`);
-    lines.push(`  ${'Por apartamento'.padEnd(15)}: ${fmt(Math.round(state.hyd4.perApto)).padStart(18)} COP`);
+    lines.push(`  PRESUPUESTO NETO: ${fmt(state.hyd4.total).padStart(18)} COP`);
+    lines.push(`  Costo prorrateado/Apto: ${fmt(Math.round(state.hyd4.perApto)).padStart(18)} COP`);
     lines.push('');
   }
 
-  lines.push('─────────────────────────────────────────────────────────────────────────');
-  lines.push('Generado con Simulador Hidráulico — github.com/ismavid/hydraulic-building-simulator');
+  lines.push('=========================================================================');
+  lines.push('Memoria técnica autogenerada por Simulador Hidráulico en GitHub Pages.');
+  lines.push('Desarrollado bajo estándares NTC 1500 y ecuaciones fundamentales de fluidos.');
 
   const text = lines.join('\n');
   document.getElementById('export-text').value = text;
 
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => showToast('✓ Resultados copiados al portapapeles'));
+    navigator.clipboard.writeText(text).then(() => showToast('✓ Memoria técnica copiada al portapapeles'));
   } else {
     const ta = document.getElementById('export-text');
     ta.select();
-    showToast('Selecciona el texto y copia manualmente (Ctrl+C)');
+    showToast('Selecciona el texto de la memoria y copia manualmente (Ctrl+C)');
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-//  SVG HELPERS
+//  SVG CHART HELPERS WITH DARK SCADA ESTHETICS
 // ══════════════════════════════════════════════════════════════
 
 function svgBarChart(data, opts) {
@@ -665,25 +714,25 @@ function svgBarChart(data, opts) {
   const bw = (w / data.length) * 0.7;
   const gap = w / data.length;
 
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:transparent">
     <defs>
       <linearGradient id="gb1" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${opts.color1}" stop-opacity=".9"/>
-        <stop offset="100%" stop-color="${opts.color1}" stop-opacity=".6"/>
+        <stop offset="0%" stop-color="${opts.color1}" stop-opacity=".95"/>
+        <stop offset="100%" stop-color="${opts.color1}" stop-opacity=".4"/>
       </linearGradient>
       <linearGradient id="gb2" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${opts.color2}" stop-opacity=".9"/>
-        <stop offset="100%" stop-color="${opts.color2}" stop-opacity=".6"/>
+        <stop offset="0%" stop-color="${opts.color2}" stop-opacity=".95"/>
+        <stop offset="100%" stop-color="${opts.color2}" stop-opacity=".4"/>
       </linearGradient>
     </defs>
     <g transform="translate(${margin.left},${margin.top})">`;
 
-  // Y gridlines
+  // Y gridlines (Darker lines)
   for (let i=0; i<=4; i++) {
     const yy = h - (i/4) * h;
     const val = (maxVal * i/4).toFixed(3);
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="10" fill="#6b7280">${val}</text>`;
+    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <text x="-8" y="${yy+4}" text-anchor="end" font-size="9" font-family="JetBrains Mono" fill="#94a3b8">${val}</text>`;
   }
 
   // Bars
@@ -691,26 +740,32 @@ function svgBarChart(data, opts) {
     const x = i * gap + gap * 0.15;
     const h1 = (d.v1 / maxVal) * h;
     const h2 = (d.v2 / maxVal) * h;
-    s += `<rect x="${x}" y="${h - h1 - h2}" width="${bw*0.48}" height="${h1+h2}" fill="url(#gb1)" rx="2"/>`;
-    s += `<rect x="${x + bw*0.52}" y="${h - h2}" width="${bw*0.48}" height="${h2}" fill="url(#gb2)" rx="2"/>`;
-    s += `<text x="${x + bw*0.5}" y="${h + 16}" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">${d.label}</text>`;
+    
+    // Friction losses bar (rounded corners)
+    s += `<rect x="${x}" y="${h - h1 - h2}" width="${bw*0.46}" height="${h1+h2}" fill="url(#gb1)" rx="3" stroke="rgba(6,182,212,0.15)"/>`;
+    // Minor losses bar
+    s += `<rect x="${x + bw*0.50}" y="${h - h2}" width="${bw*0.46}" height="${h2}" fill="url(#gb2)" rx="3" stroke="rgba(245,158,11,0.15)"/>`;
+    
+    // Labels
+    s += `<text x="${x + bw*0.48}" y="${h + 16}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#e2e8f0">${d.label}</text>`;
+    
     if (d.total > 0.001) {
-      s += `<text x="${x + bw*0.5}" y="${h - h1 - h2 - 4}" text-anchor="middle" font-size="9" fill="#374151">${d.total.toFixed(3)}</text>`;
+      s += `<text x="${x + bw*0.24}" y="${h - h1 - h2 - 5}" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono" fill="#3b82f6">${d.total.toFixed(3)}</text>`;
     }
   });
 
   // Axes
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
+  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#475569" stroke-width="1.5"/>`;
 
   // Y axis label
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="11" fill="#6b7280">Pérdida (m c.a.)</text>`;
+  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="10" font-weight="500" fill="#94a3b8">Pérdida de Carga (m.c.a.)</text>`;
 
   // Legend
-  s += `<rect x="${w-160}" y="-16" width="12" height="12" fill="${opts.color1}" rx="2"/>
-    <text x="${w-145}" y="-6" font-size="10" fill="#374151">${opts.label1}</text>
-    <rect x="${w-80}" y="-16" width="12" height="12" fill="${opts.color2}" rx="2"/>
-    <text x="${w-65}" y="-6" font-size="10" fill="#374151">${opts.label2}</text>`;
+  s += `<rect x="${w-220}" y="-16" width="10" height="10" fill="${opts.color1}" rx="2"/>
+    <text x="${w-205}" y="-8" font-size="9" fill="#94a3b8">${opts.label1}</text>
+    <rect x="${w-110}" y="-16" width="10" height="10" fill="${opts.color2}" rx="2"/>
+    <text x="${w-95}" y="-8" font-size="9" fill="#94a3b8">${opts.label2}</text>`;
 
   s += '</g></svg>';
   return s;
@@ -722,7 +777,6 @@ function svgGradientLine(results, segments, startHead) {
   const w = W - margin.left - margin.right;
   const h = H - margin.top - margin.bottom;
 
-  // cumulative distance and pressure — start from TDH (full energy at pump outlet)
   let cumDist = 0, cumLoss = 0;
   const maxDist = segments.reduce((s, seg) => s + seg.L_m, 0) || 1;
   const maxP = startHead * 1.1 || 1;
@@ -737,40 +791,41 @@ function svgGradientLine(results, segments, startHead) {
   const py = d => h - (Math.max(0, d.y) / maxP) * h;
   const path = 'M ' + points.map(p => `${px(p)},${py(p)}`).join(' L ');
 
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:transparent">
     <g transform="translate(${margin.left},${margin.top})">`;
 
   // Grid
   for (let i=0; i<=4; i++) {
     const yy = (i/4) * h;
     const val = (maxP * (1 - i/4)).toFixed(2);
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="10" fill="#6b7280">${val}</text>`;
+    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <text x="-8" y="${yy+4}" text-anchor="end" font-size="9" font-family="JetBrains Mono" fill="#94a3b8">${val}</text>`;
   }
 
-  // Minimum pressure line
+  // Minimum pressure line (Red alarm dash)
   const ymin = h - (10 / maxP) * h;
-  s += `<line x1="0" y1="${ymin}" x2="${w}" y2="${ymin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="${w+2}" y="${ymin+4}" font-size="9" fill="#c0392b">P_mín</text>`;
+  s += `<line x1="0" y1="${ymin}" x2="${w}" y2="${ymin}" stroke="var(--red-500)" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="${w+4}" y="${ymin+3}" font-size="8" fill="var(--red-400)">P_mín (10m)</text>`;
 
-  // Gradient line
-  s += `<path d="${path}" fill="none" stroke="#1e6dbf" stroke-width="2.5" stroke-linejoin="round"/>`;
+  // Gradient line (Neon Blue)
+  s += `<path d="${path}" fill="none" stroke="var(--cyan-400)" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(0px 0px 3px rgba(34,211,238,0.4))"/>`;
+  
   // Points
   points.forEach(p => {
-    s += `<circle cx="${px(p)}" cy="${py(p)}" r="4" fill="#1e6dbf" stroke="white" stroke-width="1.5"/>`;
+    s += `<circle cx="${px(p)}" cy="${py(p)}" r="4.5" fill="var(--cyan-400)" stroke="#090f1a" stroke-width="2"/>`;
   });
 
   // Axes
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+30}" text-anchor="middle" font-size="11" fill="#6b7280">Distancia acumulada desde bomba (m)</text>`;
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="11" fill="#6b7280">Presión disponible (m c.a.)</text>`;
+  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#475569" stroke-width="1.5"/>`;
+  s += `<text x="${w/2}" y="${h+28}" text-anchor="middle" font-size="10" fill="#94a3b8">Distancia acumulada de tuberías desde bomba (m)</text>`;
+  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="10" fill="#94a3b8">Presión disponible (m c.a.)</text>`;
   s += '</g></svg>';
   return s;
 }
 
 function svgDonut(slices, total, W, H) {
-  const cx = W/2, cy = H/2 - 20, R = Math.min(W,H)*0.32, r = R*0.55;
+  const cx = W/2, cy = H/2 - 10, R = Math.min(W,H)*0.32, r = R*0.58;
   const totalVal = slices.reduce((s,sl) => s + sl.value, 0) || 1;
   let angle = -Math.PI/2;
 
@@ -783,20 +838,20 @@ function svgDonut(slices, total, W, H) {
     const xi2 = cx + r * Math.cos(angle+a), yi2 = cy + r * Math.sin(angle+a);
     const large = a > Math.PI ? 1 : 0;
     paths += `<path d="M${xi1},${yi1} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z"
-      fill="${sl.color}" opacity=".9">
+      fill="${sl.color}" stroke="#0b1329" stroke-width="1.5" opacity=".95">
       <title>${sl.label}: ${sl.value.toFixed(2)} m (${((sl.value/totalVal)*100).toFixed(1)}%)</title>
     </path>`;
     const ly = 12 + i * 18;
-    legends += `<rect x="${W-110}" y="${ly-10}" width="12" height="12" fill="${sl.color}" rx="2"/>
-      <text x="${W-94}" y="${ly}" font-size="10" fill="#374151">${sl.label} (${((sl.value/totalVal)*100).toFixed(0)}%)</text>`;
+    legends += `<rect x="${W-110}" y="${ly-10}" width="10" height="10" fill="${sl.color}" rx="2"/>
+      <text x="${W-95}" y="${ly}" font-size="9" fill="#94a3b8">${sl.label} (${((sl.value/totalVal)*100).toFixed(0)}%)</text>`;
     angle += a;
   });
 
   const label = typeof total === 'number' ? total.toFixed(2) : total;
-  return `<svg viewBox="0 0 ${W} ${H+40}" style="width:100%;max-width:${W}px">
+  return `<svg viewBox="0 0 ${W} ${H+20}" style="width:100%;max-width:${W}px;background:transparent">
     ${paths}
-    <text x="${cx}" y="${cy}" text-anchor="middle" font-size="22" font-weight="700" fill="#0c2340">${label}</text>
-    <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="11" fill="#6b7280">m c.a. / total</text>
+    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="21" font-family="Outfit" font-weight="700" fill="#ffffff">${label}</text>
+    <text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="9" font-family="Inter" fill="#94a3b8">m c.a. total</text>
     ${legends}
   </svg>`;
 }
@@ -810,58 +865,61 @@ function svgComboChart(rows, Pmin) {
   const bw = (w / rows.length) * 0.6;
   const gap = w / rows.length;
 
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:transparent">
     <g transform="translate(${margin.left},${margin.top})">`;
 
   // Q bars
   rows.forEach((r, i) => {
     const bh = (r.Q / maxQ) * h;
     const x = i * gap + gap * 0.2;
-    const color = r.tipo==='Pico' ? '#1a4a7a' : r.tipo==='Normal' ? '#2e86de' : '#a8d4f5';
-    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="2" opacity=".85">
+    const color = r.tipo==='Pico' ? '#1e3a8a' : r.tipo==='Normal' ? '#0d9488' : '#1e293b';
+    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="2" opacity=".85" stroke="rgba(255,255,255,0.04)">
       <title>${r.label}: ${r.Q.toFixed(3)} L/s</title></rect>`;
-    s += `<text x="${x+bw/2}" y="${h+14}" text-anchor="middle" font-size="9" fill="#374151" transform="rotate(-30,${x+bw/2},${h+14})">${r.horas}</text>`;
+    s += `<text x="${x+bw/2}" y="${h+14}" text-anchor="middle" font-size="9" fill="#94a3b8" transform="rotate(-30,${x+bw/2},${h+14})">${r.horas}</text>`;
   });
 
-  // Pressure line (right axis scaled to h)
+  // Pressure line (Right Axis)
   const pScale = v => h - ((v - minP) / (maxP - minP)) * h;
   const pPoints = rows.map((r, i) => `${i * gap + gap * 0.5},${pScale(r.P5)}`).join(' ');
-  s += `<polyline points="${pPoints}" fill="none" stroke="#0d8a8a" stroke-width="2.5" stroke-linejoin="round"/>`;
+  
+  s += `<polyline points="${pPoints}" fill="none" stroke="var(--cyan-400)" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(0px 0px 3px rgba(34,211,238,0.4))"/>`;
+  
   rows.forEach((r, i) => {
-    s += `<circle cx="${i * gap + gap * 0.5}" cy="${pScale(r.P5)}" r="4" fill="${r.ok?'#0d8a8a':'#c0392b'}" stroke="white" stroke-width="1.5"><title>${r.label}: P = ${r.P5.toFixed(2)} m.c.a. (${r.ok?'✓ OK':'✗ Insuficiente'})</title></circle>`;
+    s += `<circle cx="${i * gap + gap * 0.5}" cy="${pScale(r.P5)}" r="4.5" fill="${r.ok?'var(--green-400)':'var(--red-400)'}" stroke="#090f1a" stroke-width="2"><title>${r.label}: P = ${r.P5.toFixed(2)} m.c.a. (${r.ok?'✓ OK':'✗ Baja Presión'})</title></circle>`;
   });
 
   // Pmin line
   const yPmin = pScale(Pmin);
-  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="6,3"/>
-    <text x="${w+4}" y="${yPmin+4}" font-size="9" fill="#c0392b">${Pmin}m</text>`;
+  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="var(--red-500)" stroke-width="1.5" stroke-dasharray="6,3"/>
+    <text x="${w+4}" y="${yPmin+3}" font-size="8.5" fill="var(--red-400)">P_mín (${Pmin}m)</text>`;
 
   // Left axis (Q)
   for (let i=0; i<=3; i++) {
     const yy = h - (i/3)*h;
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="9" fill="#6b7280">${(maxQ*i/3).toFixed(2)}</text>`;
+    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <text x="-8" y="${yy+3}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono" fill="#94a3b8">${(maxQ*i/3).toFixed(2)}</text>`;
   }
+  
   // Right axis (P)
   for (let i=0; i<=3; i++) {
     const yy = h - (i/3)*h;
     const pv = minP + (maxP - minP) * i/3;
-    s += `<text x="${w+6}" y="${yy+4}" font-size="9" fill="#0d8a8a">${pv.toFixed(1)}</text>`;
+    s += `<text x="${w+32}" y="${yy+3}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono" fill="var(--cyan-400)">${pv.toFixed(1)}</text>`;
   }
 
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+44}" text-anchor="middle" font-size="10" fill="#6b7280">Franja horaria</text>`;
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-40" text-anchor="middle" font-size="10" fill="#374151">Caudal (L/s)</text>`;
-  s += `<text transform="rotate(90)" x="${h/2}" y="${-w-42}" text-anchor="middle" font-size="10" fill="#0d8a8a">Presión piso 5 (m.c.a.)</text>`;
+  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#475569" stroke-width="1.5"/>`;
+  s += `<text x="${w/2}" y="${h+44}" text-anchor="middle" font-size="10.5" font-weight="500" fill="#94a3b8">Franja Horaria</text>`;
+  s += `<text transform="rotate(-90)" x="${-h/2}" y="-40" text-anchor="middle" font-size="9.5" fill="#94a3b8">Caudal Q (L/s)</text>`;
+  s += `<text transform="rotate(90)" x="${h/2}" y="${-w-44}" text-anchor="middle" font-size="9.5" fill="var(--cyan-400)">Presión Piso 5 (m.c.a.)</text>`;
 
   // Legend
-  s += `<rect x="0" y="-22" width="10" height="10" fill="#1a4a7a" rx="1"/>
-    <text x="14" y="-13" font-size="9" fill="#374151">Q pico</text>
-    <rect x="60" y="-22" width="10" height="10" fill="#2e86de" rx="1"/>
-    <text x="74" y="-13" font-size="9" fill="#374151">Q normal</text>
-    <line x1="120" y1="-17" x2="140" y2="-17" stroke="#0d8a8a" stroke-width="2"/>
-    <text x="144" y="-13" font-size="9" fill="#0d8a8a">P piso 5</text>`;
+  s += `<rect x="0" y="-22" width="10" height="10" fill="#1e3a8a" rx="2"/>
+    <text x="14" y="-13" font-size="9" fill="#94a3b8">Q pico</text>
+    <rect x="65" y="-22" width="10" height="10" fill="#0d9488" rx="2"/>
+    <text x="79" y="-13" font-size="9" fill="#94a3b8">Q normal</text>
+    <line x1="135" y1="-17" x2="150" y2="-17" stroke="var(--cyan-400)" stroke-width="2"/>
+    <text x="155" y="-13" font-size="9" fill="var(--cyan-400)">P disponible</text>`;
 
   s += '</g></svg>';
   return s;
@@ -874,31 +932,166 @@ function svgValveBar(results, Pmin) {
   const bw = (w / results.length) * 0.6;
   const gap = w / results.length;
 
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:transparent">
     <g transform="translate(${margin.left},${margin.top})">`;
 
   results.forEach((r, i) => {
     const bh = (Math.max(0,r.P) / maxP) * h;
     const x = i * gap + gap * 0.2;
-    const color = r.ok ? '#1a8a4a' : '#c0392b';
-    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="3" opacity=".8"/>`;
-    s += `<text x="${x+bw/2}" y="${h-bh-4}" text-anchor="middle" font-size="10" fill="#374151">${r.P.toFixed(1)}</text>`;
-    s += `<text x="${x+bw/2}" y="${h+16}" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Piso ${r.f}</text>`;
+    const color = r.ok ? 'var(--green-500)' : 'var(--red-500)';
+    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="3" opacity=".8" stroke="rgba(255,255,255,0.06)"/>`;
+    s += `<text x="${x+bw/2}" y="${h-bh-4}" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono" fill="#ffffff">${r.P.toFixed(1)}</text>`;
+    s += `<text x="${x+bw/2}" y="${h+16}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#94a3b8">Piso ${r.f}</text>`;
   });
 
   const yPmin = h - (Pmin/maxP)*h;
-  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="${w+2}" y="${yPmin+4}" font-size="9" fill="#c0392b">P_mín</text>`;
+  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="var(--red-500)" stroke-width="1.5" stroke-dasharray="5,3"/>
+    <text x="${w+4}" y="${yPmin+3}" font-size="8.5" fill="var(--red-400)">P_mín (${Pmin}m)</text>`;
 
   for (let i=0; i<=4; i++) {
     const yy = h - (i/4)*h;
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="9" fill="#6b7280">${(maxP*i/4).toFixed(1)}</text>`;
+    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="rgba(255,255,255,0.06)"/>
+      <text x="-8" y="${yy+3}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono" fill="#94a3b8">${(maxP*i/4).toFixed(1)}</text>`;
   }
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+32}" text-anchor="middle" font-size="10" fill="#6b7280">Presión disponible por piso (m c.a.)</text>`;
+  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#475569" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#475569" stroke-width="1.5"/>`;
+  s += `<text x="${w/2}" y="${h+32}" text-anchor="middle" font-size="10" fill="#94a3b8">Presión dinámica disponible por nivel (m c.a.)</text>`;
   s += '</g></svg>';
+  return s;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  BUILDING SCHEMATIC SVG (ENGINEERING BLUEPRINT VIEW)
+// ══════════════════════════════════════════════════════════════
+function svgBuildingSchematic() {
+  const W = 500, H = 600;
+  const wallX = 80, wallW = 220;
+  const sotanoY = 520, sotanoH = 60;
+  const pisoH = 76; 
+  const piso1Y = sotanoY - pisoH;
+
+  const floorY = f => sotanoY - f * pisoH; 
+
+  const riserX = wallX + 40;
+  const riserTop = floorY(5) - 10;
+  const riserBot = sotanoY;
+
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:#050a14;font-family:Inter,sans-serif;border-radius:var(--r-md);border:1px solid rgba(255,255,255,0.04)">
+    <defs>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 Z" fill="var(--cyan-400)"/>
+      </marker>
+      <marker id="arrS" markerWidth="6" markerHeight="6" refX="5" refY="2" orient="auto">
+        <path d="M0,0 L0,4 L6,2 Z" fill="var(--teal-500)"/>
+      </marker>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="1"/>
+      </pattern>
+    </defs>
+
+    <!-- Background Grid -->
+    <rect width="${W}" height="${H}" fill="url(#grid)"/>
+
+    <!-- Title -->
+    <text x="${W/2}" y="24" text-anchor="middle" font-family="Outfit" font-size="12" font-weight="700" fill="var(--cyan-400)" letter-spacing="1">
+      DIAGRAMA UNIFILAR DEL SISTEMA HIDRÁULICO
+    </text>`;
+
+  // Draw slabs for 5 floors + basement
+  for (let f = 1; f <= 5; f++) {
+    const y = floorY(f);
+    // Concrete slabs
+    s += `<rect x="${wallX}" y="${y}" width="${wallW}" height="5" fill="#1e293b" rx="1"/>`;
+    // Left & Right walls
+    s += `<line x1="${wallX}" y1="${y+5}" x2="${wallX}" y2="${y+pisoH}" stroke="#334155" stroke-width="1.5"/>`;
+    s += `<line x1="${wallX+wallW}" y1="${y+5}" x2="${wallX+wallW}" y2="${y+pisoH}" stroke="#334155" stroke-width="1.5"/>`;
+    
+    // Floor tag
+    s += `<text x="${wallX+wallW+14}" y="${y+pisoH/2+4}" font-family="Outfit" font-size="11.5" font-weight="600" fill="#e2e8f0">Piso ${f}</text>`;
+    // Height labels
+    if (f < 5) {
+      s += `<text x="${wallX-8}" y="${y+pisoH/2+4}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono" fill="#6b7280">2.80 m</text>`;
+    }
+  }
+
+  // Basement
+  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="${sotanoH}" fill="rgba(15,23,42,0.6)" rx="2" stroke="rgba(255,255,255,0.03)"/>`;
+  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="5" fill="#1e293b" rx="1"/>`;
+  s += `<text x="${wallX+wallW+14}" y="${sotanoY+sotanoH/2+4}" font-family="Outfit" font-size="11.5" font-weight="600" fill="#e2e8f0">Sótano</text>`;
+  s += `<text x="${wallX-8}" y="${sotanoY+sotanoH/2}" text-anchor="end" font-size="8.5" font-family="JetBrains Mono" fill="#6b7280">3.50 m</text>`;
+
+  // Height dimension line
+  s += `<line x1="${wallX-25}" y1="${riserTop}" x2="${wallX-25}" y2="${sotanoY+sotanoH}" stroke="#475569" stroke-width="1" stroke-dasharray="3,2"/>`;
+  s += `<text x="${wallX-28}" y="${(riserTop + sotanoY+sotanoH)/2}" text-anchor="middle" font-size="9" fill="#94a3b8" transform="rotate(-90,${wallX-28},${(riserTop + sotanoY+sotanoH)/2})">Altura estática Δz = 16.70 m</text>`;
+
+  // Riser vertical pipe — 2" (glowing blue)
+  s += `<rect x="${riserX-4}" y="${riserTop}" width="8" height="${riserBot - riserTop}" fill="#083344" stroke="var(--cyan-400)" stroke-width="1.5" rx="2" style="filter:drop-shadow(0px 0px 2px rgba(6,182,212,0.4))"/>`;
+  
+  // Flow arrows
+  [3,2,1].forEach(f => {
+    const ay = floorY(f) + pisoH * 0.5;
+    s += `<line x1="${riserX}" y1="${ay+8}" x2="${riserX}" y2="${ay-8}" stroke="var(--cyan-400)" stroke-width="1.5" marker-end="url(#arr)"/>`;
+  });
+
+  // Diameter label on montante
+  s += `<text x="${riserX+8}" y="${floorY(3)+8}" font-size="8.5" font-family="JetBrains Mono" fill="var(--cyan-400)" font-weight="500">2" → 1½"</text>`;
+
+  // Horizontal branches per floor
+  const branchColors = { 1:'#475569', 2:'#475569', 3:'#475569', 4:'#475569', 5:'#ef4444' };
+  for (let f = 1; f <= 5; f++) {
+    const y = floorY(f) + pisoH * 0.55;
+    const bx2 = wallX + wallW - 20;
+
+    // Tee intersection
+    s += `<circle cx="${riserX}" cy="${y}" r="3.5" fill="${f===5?'#ef4444':'var(--cyan-500)'}" stroke="#050a14" stroke-width="1"/>`;
+
+    // Horizontal pipe
+    s += `<line x1="${riserX+3}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="${f===5?2:1.2}" stroke-dasharray="${f===5?'none':'3,2'}"/>`;
+    s += `<line x1="${bx2-6}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="1.2" marker-end="url(#arrS)"/>`;
+
+    // Diameter labels on branches
+    const diamLabel = f <= 2 ? '1"' : f <= 4 ? '1"' : '¾" → ½"';
+    s += `<text x="${riserX + (bx2-riserX)/2}" y="${y-4}" text-anchor="middle" font-size="8" fill="${f===5?'var(--red-400)':'#6b7280'}">${diamLabel}</text>`;
+
+    // Apartment count tags
+    s += `<text x="${bx2+8}" y="${y+3}" font-size="9" fill="${f===5?'var(--red-400)':'#94a3b8'}">3 Aptos</text>`;
+  }
+
+  // Pump block (sótano)
+  const pumpX = riserX, pumpY = sotanoY + 32;
+  s += `<ellipse cx="${pumpX}" cy="${pumpY}" rx="18" ry="12" fill="#0d9488" stroke="#115e59" stroke-width="1.5"/>`;
+  s += `<text x="${pumpX}" y="${pumpY+3}" text-anchor="middle" font-family="Outfit" font-size="8.5" font-weight="700" fill="white">BOMBA</text>`;
+  s += `<text x="${pumpX}" y="${pumpY+18}" text-anchor="middle" font-size="8" font-family="JetBrains Mono" fill="var(--teal-500)">1.5 HP</text>`;
+
+  // Tank block (basement)
+  const tankX = wallX + wallW - 55, tankY = sotanoY + 8, tankW = 50, tankH = 44;
+  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="${tankH}" fill="#0f172a" stroke="var(--cyan-500)" stroke-width="1.5" rx="3"/>`;
+  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="8" fill="#1e293b" rx="2" stroke="rgba(255,255,255,0.03)"/>`;
+  s += `<text x="${tankX+tankW/2}" y="${tankY+22}" text-anchor="middle" font-family="Outfit" font-size="8.5" font-weight="600" fill="#e2e8f0">TANQUE</text>`;
+  s += `<text x="${tankX+tankW/2}" y="${tankY+34}" text-anchor="middle" font-size="8" font-family="JetBrains Mono" fill="var(--cyan-400)">22,680 L</text>`;
+
+  // Tank supply pipe
+  s += `<line x1="${tankX}" y1="${pumpY}" x2="${pumpX+18}" y2="${pumpY}" stroke="var(--cyan-400)" stroke-width="1.5" stroke-dasharray="3,2"/>`;
+
+  // Hotspot point most unfavorable — Piso 5 Ducha
+  const px5 = wallX + wallW - 14, py5 = floorY(5) + pisoH * 0.55;
+  s += `<circle cx="${px5}" cy="${py5}" r="5.5" fill="var(--red-500)" stroke="#ffffff" stroke-width="1.5" style="filter:drop-shadow(0px 0px 4px rgba(239,68,68,0.75))"/>`;
+  s += `<text x="${px5+10}" y="${py5-8}" font-size="9.5" fill="var(--red-400)" font-weight="700">Tramo Crítico</text>`;
+  s += `<text x="${px5+10}" y="${py5+3}" font-size="8.5" fill="#94a3b8">(P5 Ducha)</text>`;
+
+  // Legend box
+  const lx = 10, ly = H - 85;
+  s += `<rect x="${lx}" y="${ly}" width="125" height="76" fill="#090f1a" stroke="rgba(255,255,255,0.05)" stroke-width="1" rx="4"/>`;
+  s += `<rect x="${lx+6}" y="${ly+8}" width="10" height="6" fill="#083344" stroke="var(--cyan-400)" stroke-width="1" rx="1"/>`;
+  s += `<text x="${lx+22}" y="${ly+14}" font-size="8.5" fill="#94a3b8">Montante vertical</text>`;
+  s += `<line x1="${lx+6}" y1="${ly+26}" x2="${lx+16}" y2="${ly+26}" stroke="#475569" stroke-width="1.5" stroke-dasharray="3,2"/>`;
+  s += `<text x="${lx+22}" y="${ly+30}" font-size="8.5" fill="#94a3b8">Ramal de piso</text>`;
+  s += `<line x1="${lx+6}" y1="${ly+42}" x2="${lx+16}" y2="${ly+42}" stroke="var(--red-500)" stroke-width="1.5"/>`;
+  s += `<text x="${lx+22}" y="${ly+46}" font-size="8.5" fill="var(--red-400)">Tramo desfavorable</text>`;
+  s += `<ellipse cx="${lx+11}" cy="${ly+59}" rx="6.5" ry="4.5" fill="#0d9488"/>`;
+  s += `<text x="${lx+22}" y="${ly+63}" font-size="8.5" fill="#94a3b8">Bomba centrífuga</text>`;
+
+  s += '</svg>';
   return s;
 }
 
@@ -907,9 +1100,9 @@ function svgValveBar(results, Pmin) {
 // ══════════════════════════════════════════════════════════════
 function runAll() {
   const btn = document.getElementById('run-all-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando motor hidráulico…'; }
 
-  // Ensure all cards are open
+  // Ensure all modules are visible
   ['card-hyd1','card-hyd2','card-hyd3','card-hyd4'].forEach(id => {
     const card = document.getElementById(id);
     if (!card) return;
@@ -928,8 +1121,8 @@ function runAll() {
   runHyd3();
   runHyd4();
 
-  if (btn) { btn.disabled = false; btn.textContent = '▶▶ Ejecutar Todo (HYD-1 → 4)'; }
-  showToast('✓ Todos los módulos calculados con valores por defecto');
+  if (btn) { btn.disabled = false; btn.textContent = '⚡ Ejecutar Simulación Completa (Módulos HYD-1 → HYD-4)'; }
+  showToast('✓ Simulación completada con éxito. Todos los módulos operativos.');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -950,141 +1143,6 @@ function updateHourlyBadge() {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  BUILDING SCHEMATIC SVG
-// ══════════════════════════════════════════════════════════════
-function svgBuildingSchematic() {
-  const W = 500, H = 600;
-  // Layout: building left side, labels right side
-  const wallX = 80, wallW = 220;
-  const sotanoY = 520, sotanoH = 60;
-  const pisoH = 76; // px per floor
-  const piso1Y = sotanoY - pisoH;
-
-  // Floor Y positions (top of each floor slab)
-  const floorY = f => sotanoY - f * pisoH; // f=1..5
-
-  // Riser pipe x center
-  const riserX = wallX + 40;
-  const riserTop = floorY(5) - 10;
-  const riserBot = sotanoY;
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:Inter,sans-serif">
-    <defs>
-      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L8,3 Z" fill="#1e6dbf"/>
-      </marker>
-      <marker id="arrS" markerWidth="6" markerHeight="6" refX="5" refY="2" orient="auto">
-        <path d="M0,0 L0,4 L6,2 Z" fill="#0d8a8a"/>
-      </marker>
-    </defs>
-
-    <!-- Background -->
-    <rect width="${W}" height="${H}" fill="#f9fafb"/>
-
-    <!-- Title -->
-    <text x="${W/2}" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#0c2340">
-      Esquema Hidráulico — Edificio 5 Pisos, Bogotá D.C.
-    </text>`;
-
-  // Draw floors (5 pisos + sótano)
-  for (let f = 1; f <= 5; f++) {
-    const y = floorY(f);
-    // Floor slab
-    s += `<rect x="${wallX}" y="${y}" width="${wallW}" height="6" fill="#374151" rx="1"/>`;
-    // Floor walls (vertical lines)
-    s += `<line x1="${wallX}" y1="${y+6}" x2="${wallX}" y2="${y+pisoH}" stroke="#374151" stroke-width="2"/>`;
-    s += `<line x1="${wallX+wallW}" y1="${y+6}" x2="${wallX+wallW}" y2="${y+pisoH}" stroke="#374151" stroke-width="2"/>`;
-    // Floor label
-    s += `<text x="${wallX+wallW+14}" y="${y+pisoH/2+5}" font-size="12" font-weight="600" fill="#374151">Piso ${f}</text>`;
-    // Height dimension
-    if (f < 5) {
-      s += `<text x="${wallX-8}" y="${y+pisoH/2+4}" text-anchor="end" font-size="9" fill="#6b7280">2.80 m</text>`;
-    }
-  }
-
-  // Sótano
-  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="${sotanoH}" fill="#e5e7eb" rx="2"/>`;
-  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="6" fill="#374151" rx="1"/>`;
-  s += `<text x="${wallX+wallW+14}" y="${sotanoY+sotanoH/2+5}" font-size="12" font-weight="600" fill="#374151">Sótano</text>`;
-  s += `<text x="${wallX-8}" y="${sotanoY+sotanoH/2}" text-anchor="end" font-size="9" fill="#6b7280">3.50 m</text>`;
-
-  // Total height annotation
-  s += `<line x1="${wallX-28}" y1="${riserTop}" x2="${wallX-28}" y2="${sotanoY+sotanoH}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>`;
-  s += `<text x="${wallX-30}" y="${(riserTop + sotanoY+sotanoH)/2}" text-anchor="end" font-size="9" fill="#6b7280" transform="rotate(-90,${wallX-30},${(riserTop + sotanoY+sotanoH)/2})">Δz = 16.70 m</text>`;
-
-  // Riser pipe (montante) — 2" (blue)
-  s += `<rect x="${riserX-5}" y="${riserTop}" width="10" height="${riserBot - riserTop}" fill="#93c5fd" stroke="#1e6dbf" stroke-width="1.5" rx="3"/>`;
-  // Flow arrows up the riser
-  [3,2,1].forEach(f => {
-    const ay = floorY(f) + pisoH * 0.5;
-    s += `<line x1="${riserX}" y1="${ay+10}" x2="${riserX}" y2="${ay-10}" stroke="#1e6dbf" stroke-width="1.5" marker-end="url(#arr)"/>`;
-  });
-
-  // Diameter label on riser
-  s += `<text x="${riserX+8}" y="${floorY(3)+10}" font-size="9" fill="#1e6dbf" font-weight="600">2" → 1½"</text>`;
-
-  // Tees + horizontal branches at each floor
-  const branchColors = { 1:'#374151', 2:'#374151', 3:'#374151', 4:'#374151', 5:'#c0392b' };
-  for (let f = 1; f <= 5; f++) {
-    const y = floorY(f) + pisoH * 0.55;
-    const bx2 = wallX + wallW - 20;
-    const diam = f >= 3 ? '1½"' : f === 1 ? '1"' : '1"';
-
-    // Tee symbol
-    s += `<circle cx="${riserX}" cy="${y}" r="4" fill="${f===5?'#c0392b':'#1a4a7a'}" stroke="white" stroke-width="1"/>`;
-
-    // Horizontal branch
-    s += `<line x1="${riserX+4}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="${f===5?2.5:1.5}" stroke-dasharray="${f===5?'none':'4,2'}"/>`;
-    s += `<line x1="${bx2-8}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="1.5" marker-end="url(#arrS)"/>`;
-
-    // Branch diameter label
-    const diamLabel = f <= 2 ? '1"' : f <= 4 ? '1"' : '¾"→½"';
-    s += `<text x="${riserX + (bx2-riserX)/2}" y="${y-5}" text-anchor="middle" font-size="8" fill="${f===5?'#c0392b':'#6b7280'}">${diamLabel}</text>`;
-
-    // Apt label
-    s += `<text x="${bx2+6}" y="${y+4}" font-size="9" fill="${f===5?'#c0392b':'#374151'}">3 aptos</text>`;
-  }
-
-  // Pump (sótano)
-  const pumpX = riserX, pumpY = sotanoY + 32;
-  s += `<ellipse cx="${pumpX}" cy="${pumpY}" rx="16" ry="12" fill="#0d8a8a" opacity=".9"/>`;
-  s += `<text x="${pumpX}" y="${pumpY+4}" text-anchor="middle" font-size="9" font-weight="700" fill="white">BOMBA</text>`;
-  s += `<text x="${pumpX}" y="${pumpY+18}" text-anchor="middle" font-size="8" fill="#0d8a8a">1.5 HP</text>`;
-
-  // Tank (sótano)
-  const tankX = wallX + wallW - 55, tankY = sotanoY + 8, tankW = 50, tankH = 44;
-  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="${tankH}" fill="#dbeafe" stroke="#1e6dbf" stroke-width="1.5" rx="3"/>`;
-  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="8" fill="#93c5fd" rx="3"/>`;
-  s += `<text x="${tankX+tankW/2}" y="${tankY+24}" text-anchor="middle" font-size="8" font-weight="600" fill="#1a4a7a">TANQUE</text>`;
-  s += `<text x="${tankX+tankW/2}" y="${tankY+36}" text-anchor="middle" font-size="8" fill="#1a4a7a">22,680 L</text>`;
-
-  // Supply pipe from tank to pump
-  s += `<line x1="${tankX}" y1="${pumpY}" x2="${pumpX+16}" y2="${pumpY}" stroke="#1e6dbf" stroke-width="2" stroke-dasharray="4,2"/>`;
-
-  // Point most unfavorable — Piso 5, Apto 3
-  const px5 = wallX + wallW - 14, py5 = floorY(5) + pisoH * 0.55;
-  s += `<circle cx="${px5}" cy="${py5}" r="6" fill="#c0392b" stroke="white" stroke-width="1.5"/>`;
-  s += `<text x="${px5+10}" y="${py5-8}" font-size="9" fill="#c0392b" font-weight="600">Punto más</text>`;
-  s += `<text x="${px5+10}" y="${py5+3}" font-size="9" fill="#c0392b" font-weight="600">desfavorable</text>`;
-  s += `<text x="${px5+10}" y="${py5+14}" font-size="8" fill="#c0392b">(Ducha, P5 Apto 3)</text>`;
-
-  // Legend
-  const lx = 10, ly = H - 80;
-  s += `<rect x="${lx}" y="${ly}" width="120" height="72" fill="white" stroke="#d1d5db" stroke-width="1" rx="4"/>`;
-  s += `<rect x="${lx+6}" y="${ly+8}" width="10" height="6" fill="#93c5fd" stroke="#1e6dbf" stroke-width="1" rx="1"/>`;
-  s += `<text x="${lx+20}" y="${ly+15}" font-size="9" fill="#374151">Montante (2"→1½")</text>`;
-  s += `<line x1="${lx+6}" y1="${ly+26}" x2="${lx+16}" y2="${ly+26}" stroke="#374151" stroke-width="1.5" stroke-dasharray="3,2"/>`;
-  s += `<text x="${lx+20}" y="${ly+30}" font-size="9" fill="#374151">Ramales piso (1")</text>`;
-  s += `<line x1="${lx+6}" y1="${ly+42}" x2="${lx+16}" y2="${ly+42}" stroke="#c0392b" stroke-width="2"/>`;
-  s += `<text x="${lx+20}" y="${ly+46}" font-size="9" fill="#c0392b">Tramo desfavorable</text>`;
-  s += `<ellipse cx="${lx+11}" cy="${ly+58}" rx="7" ry="5" fill="#0d8a8a"/>`;
-  s += `<text x="${lx+20}" y="${ly+62}" font-size="9" fill="#374151">Bomba centrífuga</text>`;
-
-  s += '</svg>';
-  return s;
-}
-
-// ══════════════════════════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════════════════════════
 function fmt(n) {
@@ -1098,5 +1156,5 @@ function showToast(msg) {
   t.className = 'toast';
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2800);
+  setTimeout(() => t.remove(), 2500);
 }
