@@ -1,5 +1,5 @@
 /**
- * app.js — Simulador Hidráulico UI (SCADA Dark Mode Sobrio Refinado)
+ * app.js — Simulador Hidráulico UI (SCADA Dark Mode Sobrio Refinado - Sin Traslapes)
  * Proyecto Final Fenómenos de Transporte — U. de La Sabana, 2026
  */
 'use strict';
@@ -734,11 +734,11 @@ function doExport() {
 
 function svgBarChart(data, opts) {
   const W = opts.width || 700, H = opts.height || 260;
-  const margin = { top:20, right:20, bottom:50, left:55 };
+  const margin = { top:25, right:20, bottom:50, left:55 };
   const w = W - margin.left - margin.right;
   const h = H - margin.top - margin.bottom;
   const maxVal = Math.max(...data.map(d => d.total)) * 1.15 || 1;
-  const bw = (w / data.length) * 0.7;
+  const bw = (w / data.length) * 0.65;
   const gap = w / data.length;
 
   let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:transparent">
@@ -776,7 +776,8 @@ function svgBarChart(data, opts) {
     // Labels (No overlapping, balanced spacing)
     s += `<text x="${x + bw*0.48}" y="${h + 16}" text-anchor="middle" font-size="10" font-weight="600" fill="#e2e8f0">${d.label}</text>`;
     
-    if (d.total > 0.001) {
+    // Only show numeric total value if it's large enough, to avoid crowding zero-value/tiny decimals
+    if (d.total > 0.05) {
       s += `<text x="${x + bw*0.24}" y="${h - h1 - h2 - 5}" text-anchor="middle" font-size="8.5" font-family="JetBrains Mono" fill="#3b82f6">${d.total.toFixed(3)}</text>`;
     }
   });
@@ -788,11 +789,11 @@ function svgBarChart(data, opts) {
   // Y axis label
   s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="10" font-weight="500" fill="#94a3b8">Pérdida de Carga (m.c.a.)</text>`;
 
-  // Legend
-  s += `<rect x="${w-220}" y="-16" width="10" height="10" fill="${opts.color1}" rx="2"/>
-    <text x="${w-205}" y="-8" font-size="9" fill="#94a3b8">${opts.label1}</text>
-    <rect x="${w-110}" y="-16" width="10" height="10" fill="${opts.color2}" rx="2"/>
-    <text x="${w-95}" y="-8" font-size="9" fill="#94a3b8">${opts.label2}</text>`;
+  // Legend (Positioned safely above)
+  s += `<rect x="${w-220}" y="-18" width="10" height="10" fill="${opts.color1}" rx="2"/>
+    <text x="${w-205}" y="-10" font-size="9" fill="#94a3b8">${opts.label1}</text>
+    <rect x="${w-110}" y="-18" width="10" height="10" fill="${opts.color2}" rx="2"/>
+    <text x="${w-95}" y="-10" font-size="9" fill="#94a3b8">${opts.label2}</text>`;
 
   s += '</g></svg>';
   return s;
@@ -829,10 +830,12 @@ function svgGradientLine(results, segments, startHead) {
       <text x="-8" y="${yy+4}" text-anchor="end" font-size="9" font-family="JetBrains Mono" fill="#94a3b8">${val}</text>`;
   }
 
-  // Minimum pressure line (Red alarm dash) - Placed safely to avoid overlap
+  // Minimum pressure line (Red alarm dash)
+  // CRITICAL RESOLUTION: Placed on the LEFT (x="8", start) where the hydraulic grade is highest (~30m),
+  // guaranteeing 0% overlap/crossover with the cyan pressure line (which falls toward 10m on the right).
   const ymin = h - (10 / maxP) * h;
   s += `<line x1="0" y1="${ymin}" x2="${w}" y2="${ymin}" stroke="var(--red-500)" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="${w-80}" y="${ymin-6}" font-size="8.5" font-weight="600" fill="var(--red-400)">Presión mínima (10 m.c.a.)</text>`;
+    <text x="8" y="${ymin-6}" text-anchor="start" font-size="8.5" font-weight="600" fill="var(--red-400)">Presión mínima requerida (10 m.c.a.)</text>`;
 
   // Gradient line (Neon Blue)
   s += `<path d="${path}" fill="none" stroke="var(--cyan-400)" stroke-width="2.5" stroke-linejoin="round" style="filter:drop-shadow(0px 0px 3px rgba(34,211,238,0.4))"/>`;
@@ -852,7 +855,11 @@ function svgGradientLine(results, segments, startHead) {
 }
 
 function svgDonut(slices, total, W, H) {
-  const cx = W/2, cy = H/2 - 10, R = Math.min(W,H)*0.32, r = R*0.58;
+  // CRITICAL RESOLUTION: Overriding compact 220px sizes to have dedicated spacious right-hand legends.
+  // Donut placed on the left, legends vertically stacked on the right. 0% overlap guaranteed.
+  const viewBoxW = 380;
+  const viewBoxH = 200;
+  const cx = 100, cy = 100, R = 65, r = 38;
   const totalVal = slices.reduce((s,sl) => s + sl.value, 0) || 1;
   let angle = -Math.PI/2;
 
@@ -868,23 +875,25 @@ function svgDonut(slices, total, W, H) {
       fill="${sl.color}" stroke="#0b1329" stroke-width="1.5" opacity=".95">
       <title>${sl.label}: ${sl.value.toFixed(2)} m (${((sl.value/totalVal)*100).toFixed(1)}%)</title>
     </path>`;
-    const ly = 12 + i * 18;
-    legends += `<rect x="${W-110}" y="${ly-10}" width="10" height="10" fill="${sl.color}" rx="2"/>
-      <text x="${W-95}" y="${ly}" font-size="9" fill="#94a3b8">${sl.label} (${((sl.value/totalVal)*100).toFixed(0)}%)</text>`;
+    
+    // Spaced vertical layout on the right side
+    const ly = 38 + i * 21;
+    legends += `<rect x="210" y="${ly-10}" width="10" height="10" fill="${sl.color}" rx="2"/>
+      <text x="225" y="${ly-1}" font-size="10.5" fill="#94a3b8" font-family="Inter">${sl.label} (${((sl.value/totalVal)*100).toFixed(0)}%)</text>`;
     angle += a;
   });
 
   const label = typeof total === 'number' ? total.toFixed(2) : total;
-  return `<svg viewBox="0 0 ${W} ${H+20}" style="width:100%;max-width:${W}px;background:transparent">
+  return `<svg viewBox="0 0 ${viewBoxW} ${viewBoxH}" style="width:100%;max-width:${viewBoxW}px;background:transparent">
     ${paths}
-    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="21" font-family="Outfit" font-weight="700" fill="#ffffff">${label}</text>
-    <text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="9" font-family="Inter" fill="#94a3b8">m c.a. total</text>
+    <text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="20" font-family="Outfit" font-weight="700" fill="#ffffff">${label}</text>
+    <text x="${cx}" y="${cy+13}" text-anchor="middle" font-size="9.5" font-family="Inter" fill="#94a3b8">m c.a. total</text>
     ${legends}
   </svg>`;
 }
 
 function svgComboChart(rows, Pmin) {
-  const W=680, H=260, margin={top:30,right:60,bottom:60,left:55};
+  const W=680, H=260, margin={top:35,right:60,bottom:60,left:55};
   const w=W-margin.left-margin.right, h=H-margin.top-margin.bottom;
   const maxQ = Math.max(...rows.map(r=>r.Q)) * 1.3 || 1;
   const minP = Math.min(...rows.map(r=>r.P5)) * 0.85;
@@ -938,7 +947,9 @@ function svgComboChart(rows, Pmin) {
     <line x1="0" y1="0" x2="0" y2="${h}" stroke="#475569" stroke-width="1.5"/>`;
   s += `<text x="${w/2}" y="${h+44}" text-anchor="middle" font-size="10.5" font-weight="500" fill="#94a3b8">Franja Horaria</text>`;
   s += `<text transform="rotate(-90)" x="${-h/2}" y="-40" text-anchor="middle" font-size="9.5" fill="#94a3b8">Caudal Q (L/s)</text>`;
-  s += `<text transform="rotate(90)" x="${h/2}" y="${-w-44}" text-anchor="middle" font-size="9.5" fill="var(--cyan-400)">Presión Piso 5 (m.c.a.)</text>`;
+  
+  // CRITICAL RESOLUTION: Using precise pivot rotation around (w+45, h/2) to keep text centered on the right axis
+  s += `<text x="${w + 45}" y="${h/2}" text-anchor="middle" font-size="9.5" fill="var(--cyan-400)" transform="rotate(90,${w + 45},${h/2})">Presión Piso 5 (m.c.a.)</text>`;
 
   // Legend
   s += `<rect x="0" y="-22" width="10" height="10" fill="#1e3a8a" rx="2"/>
@@ -963,11 +974,16 @@ function svgValveBar(results, Pmin) {
     <g transform="translate(${margin.left},${margin.top})">`;
 
   results.forEach((r, i) => {
-    const bh = (Math.max(0,r.P) / maxP) * h;
+    // Clamp bar height at minimum 2px so it remains physically visible in alarm state (r.P < 0)
+    const bh = Math.max(2, (Math.max(0, r.P) / maxP) * h);
     const x = i * gap + gap * 0.2;
     const color = r.ok ? 'var(--green-500)' : 'var(--red-500)';
     s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="3" opacity=".8" stroke="rgba(255,255,255,0.06)"/>`;
-    s += `<text x="${x+bw/2}" y="${h-bh-4}" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono" fill="#ffffff">${r.P.toFixed(1)}</text>`;
+    
+    // CRITICAL RESOLUTION: Placing negative numbers at a safe offset h-6, preventing crossover with Floor Labels (h+16)
+    const labelY = r.P < 0 ? h - 6 : h - bh - 5;
+    const labelColor = r.P < 0 ? 'var(--red-400)' : '#ffffff';
+    s += `<text x="${x+bw/2}" y="${labelY}" text-anchor="middle" font-size="9.5" font-family="JetBrains Mono" fill="${labelColor}">${r.P.toFixed(1)}</text>`;
     s += `<text x="${x+bw/2}" y="${h+16}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#94a3b8">Piso ${r.f}</text>`;
   });
 
@@ -1149,7 +1165,7 @@ function svgBuildingSchematic() {
   const pumpX = riserX, pumpY = sotanoY + 25;
   s += `<ellipse cx="${pumpX}" cy="${pumpY}" rx="18" ry="12" fill="#0d9488" stroke="#115e59" stroke-width="1.5"/>`;
   s += `<text x="${pumpX}" y="${pumpY+3}" text-anchor="middle" font-family="Outfit" font-size="8" font-weight="700" fill="white">BOMBA</text>`;
-  s += `<text x="${pumpX}" y="${pumpY+17}" text-anchor="middle" font-size="8" font-family="JetBrains Mono" fill="var(--teal-500)">1.5 HP</text>`;
+  s += `<text x="${pumpX}" y="${pumpY+18}" text-anchor="middle" font-size="8" font-family="JetBrains Mono" fill="var(--teal-500)">1.5 HP</text>`;
   
   // Tank
   const tankX = wallX + wallW - 55, tankY = sotanoY + 8, tankW = 50, tankH = 44;
@@ -1165,7 +1181,7 @@ function svgBuildingSchematic() {
   const lx = 20, ly = H - 90;
   s += `<rect x="${lx}" y="${ly}" width="145" height="76" fill="#090f1a" stroke="rgba(255,255,255,0.05)" stroke-width="1" rx="4"/>`;
   s += `<rect x="${lx+6}" y="${ly+8}" width="10" height="6" fill="#083344" stroke="var(--cyan-400)" stroke-width="1" rx="1"/>`;
-  s += `<text x="${lx+22}" y="${ly+13}" font-size="8.5" fill="#94a3b8">Montante principal (Cyan)</text>`;
+  s += `<text x="${lx+22}" y="${ly+14}" font-size="8.5" fill="#94a3b8">Montante principal (Cyan)</text>`;
   s += `<line x1="${lx+6}" y1="${ly+26}" x2="${lx+16}" y2="${ly+26}" stroke="#475569" stroke-width="1.5" stroke-dasharray="3,3" opacity="0.6"/>`;
   s += `<text x="${lx+22}" y="${ly+30}" font-size="8.5" fill="#6b7280">Ramales otros pisos (Dashed)</text>`;
   s += `<line x1="${lx+6}" y1="${ly+42}" x2="${lx+16}" y2="${ly+42}" stroke="var(--red-500)" stroke-width="1.8"/>`;
