@@ -22,17 +22,25 @@ const HydEngine = (() => {
     function frictionFactor(Re, eps_m, D_m) {
         if (Re < 2300) return 64 / Re;
         const r = eps_m / (3.7 * D_m);
-        let f = 0.02; // initial guess
-        for (let i = 0; i < 15; i++) {
-            const sf = Math.sqrt(f);
-            const rhs = -2 * Math.log10(r + 2.51 / (Re * sf));
-            const F = 1 / sf - rhs;
-            const dF = -0.5 / (f * sf) - 2.51 / (Re * Math.log(10) * 2 * sf * f);
-            const fn = f - F / dF;
-            if (Math.abs(fn - f) < 1e-10) { f = fn; break; }
-            f = Math.max(fn, 1e-6);
+        
+        // Initial guess for x = 1/sqrt(f) using Haaland equation
+        let x = -1.8 * Math.log10(Math.pow(r, 1.11) + 6.9 / Re);
+        if (isNaN(x) || x <= 0) x = 7.0; // fallback guess
+        
+        const ln10 = Math.log(10);
+        for (let i = 0; i < 12; i++) {
+            const term = r + 2.51 * x / Re;
+            if (term <= 0) break;
+            const F = x + 2 * Math.log10(term);
+            const dF = 1 + 5.02 / (ln10 * (Re * r + 2.51 * x));
+            const x_next = x - F / dF;
+            if (Math.abs(x_next - x) < 1e-10) {
+                x = x_next;
+                break;
+            }
+            x = x_next;
         }
-        return f;
+        return 1 / (x * x);
     }
 
     // ── Single segment analysis ───────────────────────────────────────────────
