@@ -47,9 +47,22 @@
     <span class="chip">2 640 m.s.n.m.</span>
     <span class="chip">15 °C</span>
   </div>
+
+  <!-- View switcher -->
+  <div class="view-switcher">
+    <button class="view-tab active" id="vtab-sim" onclick="switchView('sim')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Simulación
+    </button>
+    <button class="view-tab" id="vtab-calc" onclick="switchView('calc')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Análisis
+    </button>
+  </div>
 </header>
 
-<!-- ══ MAIN GRID ═══════════════════════════════════════════ -->
+<!-- ══ VIEW: SIMULACIÓN ════════════════════════════════════ -->
+<div id="view-sim">
 <div class="sim-wrapper">
 
   <!-- LEFT: Controls ──────────────────────────────────────── -->
@@ -283,6 +296,193 @@
     </table>
   </div>
 </details>
+</div><!-- /view-sim -->
+
+<!-- ══ VIEW: ANÁLISIS NUMÉRICO ════════════════════════════ -->
+<div id="view-calc" class="view-calc" style="display:none">
+  <div class="calc-container">
+
+    <!-- Top bar -->
+    <div class="calc-topbar">
+      <div>
+        <div class="calc-main-title">Análisis Hidráulico Completo</div>
+        <div class="calc-main-sub">Edificio 5 pisos · Bogotá D.C. · NTC 1500 · Colebrook-White + Darcy-Weisbach</div>
+      </div>
+      <button class="calc-run-all-btn" onclick="runAllCalc()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Ejecutar todo (HYD-1 → 4)
+      </button>
+    </div>
+
+    <!-- ── HYD-1 ── -->
+    <div class="calc-card" id="cc-hyd1">
+      <div class="calc-card-hdr open" onclick="toggleCalcCard(this,'cbody-hyd1')">
+        <div class="calc-step-num c-blue">1</div>
+        <div class="calc-card-info">
+          <div class="calc-card-title">Análisis de pérdidas hidráulicas</div>
+          <div class="calc-card-desc">Colebrook-White · Darcy-Weisbach · Tramos T1–T9 · Verificación NTC 1500</div>
+        </div>
+        <span class="calc-status-badge" id="cst-hyd1">Pendiente</span>
+        <span class="calc-chev">▲</span>
+      </div>
+      <div class="calc-card-body open" id="cbody-hyd1">
+        <div class="calc-sect-lbl">Propiedades del fluido — agua a 15 °C, Bogotá</div>
+        <div class="calc-input-row">
+          <div class="calc-field"><label>Densidad ρ<span class="cu">kg/m³</span></label><input id="c-rho" type="number" value="999.1" step="0.1"></div>
+          <div class="calc-field"><label>Viscosidad μ<span class="cu">Pa·s</span></label><input id="c-mu" type="number" value="0.001138" step="0.000001"></div>
+          <div class="calc-field"><label>Rugosidad PVC ε<span class="cu">m</span></label><input id="c-eps" type="number" value="0.0000015" step="0.0000001"></div>
+          <div class="calc-field"><label>Caudal de diseño<span class="cu">L/s</span></label><input id="c-qd" type="number" value="2.30" step="0.01"></div>
+        </div>
+        <div class="calc-sect-lbl">Red hidráulica — tramos T1–T9</div>
+        <div class="calc-table-wrap"><table class="calc-table" id="c-segs-table">
+          <thead><tr><th>Tramo</th><th>Descripción</th><th>D interno (mm)</th><th>Longitud (m)</th><th>Caudal (L/s)</th><th>ΣK accesorios</th></tr></thead>
+          <tbody id="c-segs-body"></tbody>
+        </table></div>
+        <button class="calc-run-btn c-btn-blue" onclick="runHyd1Calc()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Calcular pérdidas hidráulicas
+        </button>
+        <div id="c-hyd1-out" style="display:none;margin-top:20px">
+          <div class="calc-sect-lbl">Resultados por tramo</div>
+          <div class="calc-table-wrap" id="c-hyd1-tbl"></div>
+          <div id="c-hyd1-alerts"></div>
+          <div class="calc-charts-row">
+            <div class="calc-chart-box"><div class="calc-chart-title">Pérdidas por tramo (m) — Fricción vs Menores</div><div id="c-hyd1-bars"></div></div>
+            <div class="calc-chart-box"><div class="calc-chart-title">Gradiente hidráulico (m) desde la bomba</div><div id="c-hyd1-grad"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HYD-2 ── -->
+    <div class="calc-card" id="cc-hyd2">
+      <div class="calc-card-hdr" onclick="toggleCalcCard(this,'cbody-hyd2')">
+        <div class="calc-step-num c-teal">2</div>
+        <div class="calc-card-info">
+          <div class="calc-card-title">Dimensionamiento de bomba</div>
+          <div class="calc-card-desc">Cabeza dinámica total (TDH) · Potencia en kW · NPSH disponible · Selección comercial</div>
+        </div>
+        <span class="calc-status-badge" id="cst-hyd2">Pendiente</span>
+        <span class="calc-chev">▼</span>
+      </div>
+      <div class="calc-card-body" id="cbody-hyd2">
+        <div class="calc-input-row">
+          <div class="calc-field"><label>Altura estática Δz<span class="cu">m</span></label><input id="c-dz" type="number" value="16.70" step="0.01"></div>
+          <div class="calc-field"><label>Presión req. P5<span class="cu">m</span></label><input id="c-preq" type="number" value="10.0" step="0.1"></div>
+          <div class="calc-field"><label>Eficiencia η</label><input id="c-eta" type="number" value="0.65" step="0.01"></div>
+          <div class="calc-field"><label>Pérd. totales<span class="cu">m</span><span class="auto-tag-c">auto HYD-1</span></label><input id="c-losses" type="number" value="0" step="0.001"></div>
+          <div class="calc-field"><label>Δz succión<span class="cu">m</span></label><input id="c-dzs" type="number" value="0.0" step="0.1"></div>
+          <div class="calc-field"><label>hf succión<span class="cu">m</span></label><input id="c-hfs" type="number" value="0.20" step="0.01"></div>
+        </div>
+        <button class="calc-run-btn c-btn-teal" onclick="runHyd2Calc()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Dimensionar bomba
+        </button>
+        <div id="c-hyd2-out" style="display:none;margin-top:20px">
+          <div class="calc-kpi-grid" id="c-hyd2-kpis"></div>
+          <div id="c-hyd2-alerts"></div>
+          <div class="calc-charts-row">
+            <div class="calc-chart-box"><div class="calc-chart-title">Desglose del TDH (m)</div><div id="c-hyd2-donut"></div></div>
+            <div class="calc-pump-card" id="c-hyd2-pump"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HYD-3 ── -->
+    <div class="calc-card" id="cc-hyd3">
+      <div class="calc-card-hdr" onclick="toggleCalcCard(this,'cbody-hyd3')">
+        <div class="calc-step-num c-green">3</div>
+        <div class="calc-card-info">
+          <div class="calc-card-title">Simulación horaria</div>
+          <div class="calc-card-desc">Caudal y presión en piso 5 por franja horaria · Verificación de abastecimiento continuo</div>
+        </div>
+        <span class="calc-status-badge" id="cst-hyd3">Pendiente</span>
+        <span class="calc-chev">▼</span>
+      </div>
+      <div class="calc-card-body" id="cbody-hyd3">
+        <div class="calc-input-row">
+          <div class="calc-field"><label>TDH bomba<span class="cu">m</span><span class="auto-tag-c">auto HYD-2</span></label><input id="c-tdh" type="number" value="0" step="0.1"></div>
+          <div class="calc-field"><label>Consumo diario<span class="cu">L/día</span></label><input id="c-qdaily" type="number" value="6300" step="100"></div>
+          <div class="calc-field"><label>Presión mín. req.<span class="cu">m</span></label><input id="c-pmin" type="number" value="10.0" step="0.1"></div>
+        </div>
+        <div class="calc-sect-lbl">Distribución horaria de consumo</div>
+        <div class="calc-table-wrap"><table class="calc-table">
+          <thead><tr><th>Franja</th><th>Horas</th><th>Duración (h)</th><th>% Consumo</th><th>Tipo</th></tr></thead>
+          <tbody id="c-hourly-body"></tbody>
+        </table></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span id="c-pct-badge" class="cpct-badge cpct-ok">Σ = 100%</span>
+          <span style="font-size:11px;color:var(--text-3)">La suma debe ser exactamente 100%</span>
+        </div>
+        <button class="calc-run-btn c-btn-green" onclick="runHyd3Calc()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Simular demanda horaria
+        </button>
+        <div id="c-hyd3-out" style="display:none;margin-top:20px">
+          <div class="calc-chart-box"><div class="calc-chart-title">Caudal (L/s) y presión en piso 5 (m) por franja horaria</div><div id="c-hyd3-chart"></div></div>
+          <div class="calc-table-wrap" style="margin-top:14px" id="c-hyd3-tbl"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HYD-4 ── -->
+    <div class="calc-card" id="cc-hyd4">
+      <div class="calc-card-hdr" onclick="toggleCalcCard(this,'cbody-hyd4')">
+        <div class="calc-step-num c-amber">4</div>
+        <div class="calc-card-info">
+          <div class="calc-card-title">Estimación de costos</div>
+          <div class="calc-card-desc">Precios Colombia 2024–2025 (COP) · Tuberías, accesorios, bomba, tanque, mano de obra</div>
+        </div>
+        <span class="calc-status-badge" id="cst-hyd4">Pendiente</span>
+        <span class="calc-chev">▼</span>
+      </div>
+      <div class="calc-card-body" id="cbody-hyd4">
+        <div class="calc-table-wrap"><table class="calc-table">
+          <thead><tr><th>Ítem</th><th>Und.</th><th>Precio unit. (COP)</th><th>Cantidad</th></tr></thead>
+          <tbody id="c-prices-body"></tbody>
+        </table></div>
+        <div class="calc-input-row" style="margin-top:8px">
+          <div class="calc-field"><label>HP bomba<span class="auto-tag-c">auto HYD-2</span></label><input id="c-pumphp" type="number" value="0" step="0.25"></div>
+          <div class="calc-field"><label>Puntos de agua totales</label><input id="c-points" type="number" value="105" step="1"></div>
+        </div>
+        <button class="calc-run-btn c-btn-amber" onclick="runHyd4Calc()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Calcular costos
+        </button>
+        <div id="c-hyd4-out" style="display:none;margin-top:20px">
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <div style="flex:2;min-width:280px"><div class="calc-table-wrap" id="c-hyd4-tbl"></div></div>
+            <div style="flex:1;min-width:220px"><div class="calc-chart-box"><div class="calc-chart-title">Distribución del costo</div><div id="c-hyd4-donut"></div></div></div>
+          </div>
+          <div class="calc-cost-grid" id="c-hyd4-totals"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Exportar ── -->
+    <div class="calc-card">
+      <div class="calc-card-hdr" onclick="toggleCalcCard(this,'cbody-export')">
+        <div class="calc-step-num" style="background:var(--surface-3);color:var(--text-3)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        </div>
+        <div class="calc-card-info">
+          <div class="calc-card-title">Exportar resultados</div>
+          <div class="calc-card-desc">Texto formateado listo para copiar al informe Word</div>
+        </div>
+        <span class="calc-chev">▼</span>
+      </div>
+      <div class="calc-card-body" id="cbody-export">
+        <button class="calc-run-btn" style="background:var(--text-1)" onclick="doCalcExport()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+          Generar y copiar al portapapeles
+        </button>
+        <textarea id="c-export-text" class="calc-export-ta" readonly placeholder="Ejecuta HYD-1 y HYD-2 primero…"></textarea>
+      </div>
+    </div>
+
+  </div><!-- /calc-container -->
+</div><!-- /view-calc -->
 
 <script src="js/engine.js"></script>
 <script src="js/app.js"></script>
