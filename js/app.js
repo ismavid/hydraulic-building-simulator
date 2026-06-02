@@ -1,1102 +1,588 @@
 /**
- * app.js — Simulador Hidráulico UI
- * Proyecto Final Fenómenos de Transporte — U. de La Sabana, 2026
+ * app.js — Simulador Hidráulico en Tiempo Real
+ * Sin botones de calcular — todo se actualiza al interactuar
+ * Proyecto Final Fenómenos de Transporte · U. de La Sabana 2026
  */
 'use strict';
 
-// ══════════════════════════════════════════════════════════════
-//  DEFAULT DATA
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+//  CONSTANTES DEL SISTEMA (no modificables por el usuario)
+// ═══════════════════════════════════════════════════════════
+const FLUID = { rho:999.1, mu:1.138e-3, eps_pvc:1.5e-6, Patm:74660, Pvapor:1705 };
+const G = 9.81;
+const N_PISOS = 5, N_APTOS = 3;
+const CONSUMO_CAP = 140;    // L/persona/día
+const TANK_VOL   = 22680;   // L
+const DZ_TOTAL   = 16.70;   // m (bomba → piso 5)
+const P_REQ      = 10.0;    // m.c.a. mínimo en punto de entrega
+const ETA        = 0.65;    // eficiencia bomba
+const Q_DESIGN   = 2.30;    // L/s (caudal de diseño Hunter)
 
-const DEFAULT_SEGMENTS = [
-  { id:'T1', desc:'Bomba → base montante',         D_mm:48.4,  L_m:3.0,  Q_ls:2.30, K_total:4.3  },
-  { id:'T2', desc:'Montante: sótano → P1',         D_mm:48.4,  L_m:3.5,  Q_ls:2.30, K_total:0.5  },
-  { id:'T3', desc:'Montante: P1 → P2',             D_mm:48.4,  L_m:2.8,  Q_ls:1.84, K_total:0.5  },
-  { id:'T4', desc:'Montante: P2 → P3 (reducción)', D_mm:38.1,  L_m:2.8,  Q_ls:1.38, K_total:1.3  },
-  { id:'T5', desc:'Montante: P3 → P4',             D_mm:38.1,  L_m:2.8,  Q_ls:0.92, K_total:0.5  },
-  { id:'T6', desc:'Montante: P4 → P5',             D_mm:38.1,  L_m:2.8,  Q_ls:0.46, K_total:1.8  },
-  { id:'T7', desc:'Distribución piso 5 → Apto 3',  D_mm:25.4,  L_m:8.0,  Q_ls:0.153, K_total:7.2  },
-  { id:'T8', desc:'Ramal apto → baño privado',     D_mm:19.05, L_m:4.0,  Q_ls:0.15, K_total:3.6  },
-  { id:'T9', desc:'Conexión punto (ducha)',         D_mm:12.7,  L_m:2.0,  Q_ls:0.15, K_total:1.4  },
+// Tramos hidráulicos fijos (parámetros de diseño)
+const SEGS = [
+  { id:'T1', D_mm:48.4,  L_m:3.0,  K:4.3  }, // Bomba → base montante
+  { id:'T2', D_mm:48.4,  L_m:3.5,  K:0.5  }, // Sótano → Piso 1
+  { id:'T3', D_mm:48.4,  L_m:2.8,  K:0.5  }, // P1 → P2
+  { id:'T4', D_mm:38.1,  L_m:2.8,  K:1.3  }, // P2 → P3 (reducción)
+  { id:'T5', D_mm:38.1,  L_m:2.8,  K:0.5  }, // P3 → P4
+  { id:'T6', D_mm:38.1,  L_m:2.8,  K:1.8  }, // P4 → P5
+  { id:'T7', D_mm:25.4,  L_m:8.0,  K:7.2  }, // Distribución piso sel.
+  { id:'T8', D_mm:19.05, L_m:4.0,  K:3.6  }, // Ramal apartamento
+  { id:'T9', D_mm:12.7,  L_m:2.0,  K:1.4  }, // Conexión punto uso
 ];
 
-const DEFAULT_HOURLY = [
-  { label:'Madrugada',      horas:'00–05', dur:5,  pct:0.05,  tipo:'Valle' },
-  { label:'Pico mañana',    horas:'05–07', dur:2,  pct:0.20,  tipo:'Pico'  },
-  { label:'Mañana',         horas:'07–11', dur:4,  pct:0.15,  tipo:'Normal'},
-  { label:'Pico mediodía',  horas:'11–14', dur:3,  pct:0.20,  tipo:'Pico'  },
-  { label:'Tarde',          horas:'14–19', dur:5,  pct:0.10,  tipo:'Normal'},
-  { label:'Pico noche',     horas:'19–21', dur:2,  pct:0.20,  tipo:'Pico'  },
-  { label:'Noche',          horas:'21–24', dur:3,  pct:0.10,  tipo:'Valle' },
+// Elevación de cada piso desde la bomba
+const Z_PISO = f => 3.5 + (f-1)*2.8;
+
+// Aparatos del apartamento
+const FIXTURES = [
+  { id:'ducha',    label:'Ducha',            Q:0.15, icon:'shower'  },
+  { id:'lav1',     label:'Lavamanos baño',   Q:0.10, icon:'faucet'  },
+  { id:'san1',     label:'Sanitario baño',   Q:0.10, icon:'toilet'  },
+  { id:'lav2',     label:'Lavamanos social', Q:0.10, icon:'faucet'  },
+  { id:'san2',     label:'Sanitario social', Q:0.10, icon:'toilet'  },
+  { id:'lavapl',   label:'Cocina',           Q:0.15, icon:'kitchen' },
+  { id:'lavadero', label:'Lavadero',         Q:0.20, icon:'laundry' },
 ];
 
-const DEFAULT_PRICES = [
-  { item:'Tubería PVC ½"',         unit:'m',  price:4500,    qty:210 },
-  { item:'Tubería PVC ¾"',         unit:'m',  price:6200,    qty:60  },
-  { item:'Tubería PVC 1"',         unit:'m',  price:9800,    qty:120 },
-  { item:'Tubería PVC 1½"',        unit:'m',  price:18500,   qty:8.4 },
-  { item:'Tubería PVC 2"',         unit:'m',  price:28000,   qty:9.3 },
-  { item:'Codo 90° ½"',            unit:'u',  price:1200,    qty:105 },
-  { item:'Codo 90° ¾"',            unit:'u',  price:1800,    qty:30  },
-  { item:'Codo 90° 1"',            unit:'u',  price:3500,    qty:45  },
-  { item:'Codo 90° 1½"',           unit:'u',  price:6000,    qty:4   },
-  { item:'Codo 90° 2"',            unit:'u',  price:9500,    qty:2   },
-  { item:'Tee 1"',                 unit:'u',  price:4200,    qty:30  },
-  { item:'Tee 1½"',                unit:'u',  price:7500,    qty:4   },
-  { item:'Tee 2"',                 unit:'u',  price:12000,   qty:3   },
-  { item:'Válvula compuerta 2"',   unit:'u',  price:45000,   qty:1   },
-  { item:'Válvula check 2"',       unit:'u',  price:85000,   qty:1   },
-  { item:'Válvula de paso ½"',     unit:'u',  price:12000,   qty:15  },
-  { item:'Reducción 2"→1½"',       unit:'u',  price:8500,    qty:1   },
-  { item:'Tanque 23 m³',           unit:'u',  price:12500000,qty:1   },
-  { item:'Mano de obra / punto',   unit:'pto',price:65000,   qty:105 },
-];
-
-// ══════════════════════════════════════════════════════════════
-//  STATE
-// ══════════════════════════════════════════════════════════════
-const state = {
-  hyd1: null,   // { results, totalHf, totalHm, totalH, Q_design, fluid }
-  hyd2: null,   // { TDH, P_hyd, P_hp, NPSH, pump, eta }
-  hyd3: null,   // { rows[] }
-  hyd4: null,   // { breakdown[], total, perApto }
+// Escenarios de operación
+const SCENARIOS = {
+  valle:  { label:'Hora Valle',  pct:0.05, dur_h:5  },
+  normal: { label:'Normal',      pct:0.15, dur_h:4  },
+  pico:   { label:'Hora Pico',   pct:0.20, dur_h:2  },
 };
 
-// ══════════════════════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+//  ESTADO DE LA SIMULACIÓN
+// ═══════════════════════════════════════════════════════════
+const sim = {
+  scenario:    'normal',
+  personasApto: 3,
+  pisoSel:     5,
+  fixtures:    Object.fromEntries(FIXTURES.map(f => [f.id, false])),
+};
+
+// ═══════════════════════════════════════════════════════════
+//  INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  renderBuildingSummary();
-  renderSegmentsTable();
-  renderHourlyTable();
-  renderPricesTable();
+  buildBuildingSVG();
+  renderFixtures();
 
-  // Building schematic
-  const schEl = document.getElementById('building-schematic');
-  if (schEl) schEl.innerHTML = svgBuildingSchematic();
+  // Scenario buttons
+  document.querySelectorAll('.scen-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sim.scenario = btn.dataset.scenario;
+      document.querySelectorAll('.scen-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduleUpdate();
+    });
+  });
 
-  // Hourly badge — live update on input
-  updateHourlyBadge();
-  document.getElementById('hourly-body')?.addEventListener('input', updateHourlyBadge);
+  // Personas slider
+  const slider = document.getElementById('personas-slider');
+  const sliderVal = document.getElementById('personas-val');
+  slider.addEventListener('input', () => {
+    sim.personasApto = +slider.value;
+    sliderVal.textContent = slider.value;
+    const q_daily = sim.personasApto * N_APTOS * N_PISOS * CONSUMO_CAP;
+    setEl('q-daily-display', fmt0(q_daily));
+    scheduleUpdate();
+  });
+
+  // Floor selector
+  document.querySelectorAll('.floor-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sim.pisoSel = +btn.dataset.floor;
+      document.querySelectorAll('.floor-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setEl('sel-floor-lbl', `Piso ${sim.pisoSel}`);
+      scheduleUpdate();
+    });
+  });
+
+  scheduleUpdate();
 });
 
-function renderBuildingSummary() {
-  const items = [
-    { label:'Pisos', value:'5', unit:'' },
-    { label:'Aptos / piso', value:'3', unit:'' },
-    { label:'Personas / apto', value:'3', unit:'' },
-    { label:'Población total', value:'45', unit:'hab' },
-    { label:'Consumo total', value:'6,300', unit:'L/día' },
-    { label:'Capacidad tanque', value:'22,680', unit:'L' },
-    { label:'Caudal diseño', value:'2.30', unit:'L/s (225 UH)' },
-    { label:'Alt. estática', value:'16.70', unit:'m' },
-    { label:'Altura Bogotá', value:'2,640', unit:'m.s.n.m.' },
-    { label:'P. atm. Bogotá', value:'74.66', unit:'kPa' },
-    { label:'T° agua', value:'15°C', unit:'ρ=999.1 kg/m³' },
-    { label:'Material tubería', value:'PVC', unit:'ε=1.5×10⁻⁶ m' },
+// ═══════════════════════════════════════════════════════════
+//  LOOP DE ACTUALIZACIÓN EN TIEMPO REAL
+// ═══════════════════════════════════════════════════════════
+let rafId = null;
+function scheduleUpdate() {
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(updateSim);
+}
+
+function updateSim() {
+  const scen = SCENARIOS[sim.scenario];
+
+  // Caudal diario total del edificio
+  const Q_daily = sim.personasApto * N_APTOS * N_PISOS * CONSUMO_CAP; // L/día
+
+  // Caudal de escenario (L/s)
+  const Q_scen = (scen.pct * Q_daily) / (scen.dur_h * 3600);
+
+  // Caudal de aparatos activos en el apartamento seleccionado
+  const activeF = FIXTURES.filter(f => sim.fixtures[f.id]);
+  const Q_apto  = activeF.reduce((s, f) => s + f.Q, 0);  // L/s, 1 apto
+  const Q_floor = Q_apto * N_APTOS;                       // L/s, piso seleccionado
+
+  // Caudal total en el sistema
+  // = máximo entre caudal de escenario y aparatos activos + fondo de otros pisos
+  const Q_otros = Q_scen * 4 / 5;
+  const Q_total = Math.max(Q_floor + Q_otros, Math.max(Q_scen, 0.05));
+
+  // Distribuir caudal por tramos (el ramal va decreciendo al subir)
+  const Qp = Q_total / N_PISOS; // caudal por piso
+  const segments = [
+    { ...SEGS[0], Q_ls: Q_total },
+    { ...SEGS[1], Q_ls: Q_total },
+    { ...SEGS[2], Q_ls: Math.max(Q_total - Qp,       0.03) },
+    { ...SEGS[3], Q_ls: Math.max(Q_total - 2*Qp,     0.03) },
+    { ...SEGS[4], Q_ls: Math.max(Q_total - 3*Qp,     0.03) },
+    { ...SEGS[5], Q_ls: Math.max(Q_total - 4*Qp,     0.03) },
+    { ...SEGS[6], Q_ls: Math.max(Qp / N_APTOS * 2,   0.03) },
+    { ...SEGS[7], Q_ls: Math.max(Q_apto || Qp/N_APTOS/2, 0.02) },
+    { ...SEGS[8], Q_ls: Math.max(Q_apto || 0.05,     0.02) },
   ];
-  document.getElementById('building-summary').innerHTML = items.map(i =>
-    `<div class="summary-item">
-      <div class="label">${i.label}</div>
-      <div class="value">${i.value}</div>
-      <div class="unit">${i.unit}</div>
-    </div>`
-  ).join('');
-}
 
-function renderSegmentsTable() {
-  document.getElementById('segments-body').innerHTML = DEFAULT_SEGMENTS.map((s, idx) =>
-    `<tr>
-      <td><strong>${s.id}</strong></td>
-      <td style="max-width:220px;font-size:12px;color:var(--gray-500)">${s.desc}</td>
-      <td><input type="number" data-seg="${idx}" data-field="D_mm" value="${s.D_mm}" step="0.1" style="width:70px"></td>
-      <td><input type="number" data-seg="${idx}" data-field="L_m"  value="${s.L_m}"  step="0.1" style="width:60px"></td>
-      <td><input type="number" data-seg="${idx}" data-field="Q_ls" value="${s.Q_ls}" step="0.01" style="width:60px"></td>
-      <td><input type="number" data-seg="${idx}" data-field="K_total" value="${s.K_total}" step="0.1" style="width:60px"></td>
-    </tr>`
-  ).join('');
-}
-
-function renderHourlyTable() {
-  document.getElementById('hourly-body').innerHTML = DEFAULT_HOURLY.map((h, idx) =>
-    `<tr>
-      <td><strong>${h.label}</strong></td>
-      <td style="color:var(--gray-500)">${h.horas}</td>
-      <td><input type="number" data-hour="${idx}" data-field="dur" value="${h.dur}" step="0.5" style="width:55px"></td>
-      <td><input type="number" data-hour="${idx}" data-field="pct" value="${h.pct}" step="0.01" min="0" max="1" style="width:65px"></td>
-      <td><span class="badge ${h.tipo==='Pico'?'badge-blue':'badge-teal'}" style="font-size:11px">${h.tipo}</span></td>
-    </tr>`
-  ).join('');
-}
-
-function renderPricesTable() {
-  document.getElementById('prices-body').innerHTML = DEFAULT_PRICES.map((p, idx) =>
-    `<tr>
-      <td>${p.item}</td>
-      <td style="color:var(--gray-500)">${p.unit}</td>
-      <td><input type="number" data-price="${idx}" data-field="price" value="${p.price}" step="500" style="width:110px"></td>
-      <td><input type="number" data-price="${idx}" data-field="qty"   value="${p.qty}"  step="0.1" style="width:80px"></td>
-    </tr>`
-  ).join('');
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HELPERS — read table inputs
-// ══════════════════════════════════════════════════════════════
-function readSegments() {
-  return DEFAULT_SEGMENTS.map((s, idx) => ({
-    ...s,
-    D_mm:    parseFloat(document.querySelector(`[data-seg="${idx}"][data-field="D_mm"]`).value)   || s.D_mm,
-    L_m:     parseFloat(document.querySelector(`[data-seg="${idx}"][data-field="L_m"]`).value)    || s.L_m,
-    Q_ls:    parseFloat(document.querySelector(`[data-seg="${idx}"][data-field="Q_ls"]`).value)   || s.Q_ls,
-    K_total: parseFloat(document.querySelector(`[data-seg="${idx}"][data-field="K_total"]`).value)|| s.K_total,
-  }));
-}
-
-function readHourly() {
-  return DEFAULT_HOURLY.map((h, idx) => ({
-    ...h,
-    dur: parseFloat(document.querySelector(`[data-hour="${idx}"][data-field="dur"]`).value) || h.dur,
-    pct: parseFloat(document.querySelector(`[data-hour="${idx}"][data-field="pct"]`).value),
-  }));
-}
-
-function readPrices() {
-  return DEFAULT_PRICES.map((p, idx) => ({
-    ...p,
-    price: parseFloat(document.querySelector(`[data-price="${idx}"][data-field="price"]`).value) || p.price,
-    qty:   parseFloat(document.querySelector(`[data-price="${idx}"][data-field="qty"]`).value)   || p.qty,
-  }));
-}
-
-function readFluid() {
-  return {
-    rho:    parseFloat(document.getElementById('f-rho').value)  || 999.1,
-    mu:     parseFloat(document.getElementById('f-mu').value)   || 1.138e-3,
-    eps_pvc:parseFloat(document.getElementById('f-eps').value)  || 1.5e-6,
-    Patm:   74660,
-    Pvapor: 1705,
-  };
-}
-
-// ══════════════════════════════════════════════════════════════
-//  TOGGLE CARD
-// ══════════════════════════════════════════════════════════════
-function toggleCard(header) {
-  const card = header.closest('.card');
-  const id   = card.id;
-  const bodyId = 'body-' + (id === 'card-export' ? 'export' : id.replace('card-',''));
-  const body = document.getElementById(bodyId);
-  const btn  = header.querySelector('.card-toggle');
-  if (!body) return;
-  const isOpen = body.classList.toggle('open');
-  header.classList.toggle('open', isOpen);
-  btn.textContent = isOpen ? '▲ Colapsar' : '▼ Expandir';
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HYD-1: PÉRDIDAS HIDRÁULICAS
-// ══════════════════════════════════════════════════════════════
-function runHyd1() {
-  const fluid    = readFluid();
-  const segments = readSegments();
-  const Q_design = parseFloat(document.getElementById('q-design').value) || 2.30;
-
-  const { results, totalHf, totalHm, totalH } = HydEngine.analyzePipeline(segments, fluid);
-  state.hyd1 = { results, totalHf, totalHm, totalH, Q_design, fluid };
-
-  // Auto-fill HYD-2 losses input
-  document.getElementById('p-losses').value = totalH.toFixed(4);
-
-  // ── Results table ──
-  const alerts = [];
-  let tableHtml = `<table class="results-table">
-    <thead><tr>
-      <th>Tramo</th><th>Q (L/s)</th><th>v (m/s)</th><th>Re</th><th>Régimen</th>
-      <th>f</th><th>hf (m)</th><th>ΣK</th><th>hm (m)</th><th>h_total (m)</th><th>Estado</th>
-    </tr></thead><tbody>`;
-
-  results.forEach((r, i) => {
-    const seg = segments[i];
-    const vClass = r.velWarn === 'low' ? 'warn-low' : r.velWarn === 'high' ? 'warn-high' : 'ok';
-    const statusIcon = r.velWarn === 'low' ? '⚠ v baja' : r.velWarn === 'high' ? '✗ v alta' : '✓';
-    if (r.velWarn === 'low')  alerts.push(`⚠ ${seg.id}: velocidad baja (${r.v.toFixed(3)} m/s < 0.5 m/s) — aceptable en ramales de baja demanda.`);
-    if (r.velWarn === 'high') alerts.push(`✗ ${seg.id}: velocidad excede NTC 1500 (${r.v.toFixed(3)} m/s > 2.5 m/s) — aumente diámetro.`);
-    tableHtml += `<tr>
-      <td><strong>${seg.id}</strong></td>
-      <td>${seg.Q_ls.toFixed(3)}</td>
-      <td class="${vClass}">${r.v.toFixed(3)}</td>
-      <td>${Math.round(r.Re).toLocaleString()}</td>
-      <td style="font-size:11px;color:var(--gray-500)">${r.regime}</td>
-      <td style="font-family:var(--font-mono)">${r.f.toFixed(5)}</td>
-      <td>${r.hf.toFixed(4)}</td>
-      <td>${seg.K_total.toFixed(1)}</td>
-      <td>${r.hm.toFixed(4)}</td>
-      <td><strong>${r.ht.toFixed(4)}</strong></td>
-      <td class="${vClass}" style="font-size:11px">${statusIcon}</td>
-    </tr>`;
-  });
-  tableHtml += `</tbody><tfoot><tr>
-    <td colspan="6">Σ Pérdidas totales</td>
-    <td>${totalHf.toFixed(4)}</td><td>—</td>
-    <td>${totalHm.toFixed(4)}</td>
-    <td><strong>${totalH.toFixed(4)}</strong></td><td></td>
-  </tr></tfoot></table>`;
-  document.getElementById('hyd1-results-wrap').innerHTML = tableHtml;
-
-  // ── Alerts ──
-  document.getElementById('hyd1-alerts').innerHTML = [
-    ...alerts.map(a => `<div class="alert ${a.startsWith('✗')?'alert-error':'alert-warn'}">${a}</div>`),
-    alerts.length === 0 ? '<div class="alert alert-success">✓ Todas las velocidades dentro del rango NTC 1500 (0.5–2.5 m/s)</div>' : '',
-  ].join('');
-
-  // ── Bar chart ──
-  document.getElementById('hyd1-chart-bars').innerHTML = svgBarChart(
-    results.map((r, i) => ({
-      label: segments[i].id,
-      v1: r.hf, v2: r.hm,
-      total: r.ht,
-    })),
-    { label1:'Fricción (hf)', label2:'Menores (hm)', color1:'#1e6dbf', color2:'#d4670a', width:700, height:260 }
+  // Análisis hidráulico completo
+  const { results, totalHf, totalHm, totalH } = HydEngine.analyzePipeline(
+    segments.map(s => ({ D_mm: s.D_mm, L_m: s.L_m, Q_ls: s.Q_ls, K_total: s.K })),
+    FLUID
   );
 
-  // ── Gradient line ──
-  const startHead = state.hyd2 ? state.hyd2.TDH : (totalH + 16.70 + 10.0);
-  document.getElementById('hyd1-chart-gradient').innerHTML = svgGradientLine(results, segments, startHead);
-
-  document.getElementById('hyd1-output').style.display = 'block';
-  showToast('HYD-1 calculado — pérdidas totales: ' + totalH.toFixed(3) + ' m');
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HYD-2: BOMBA
-// ══════════════════════════════════════════════════════════════
-function runHyd2() {
-  const dz      = parseFloat(document.getElementById('p-dz').value)      || 16.70;
-  const pReq    = parseFloat(document.getElementById('p-req').value)     || 10.0;
-  const eta     = parseFloat(document.getElementById('p-eta').value)     || 0.65;
-  const dzSucc  = parseFloat(document.getElementById('p-dz-succ').value) || 0;
-  const hfSucc  = parseFloat(document.getElementById('p-hf-succ').value) || 0.20;
-  const losses  = parseFloat(document.getElementById('p-losses').value)  || (state.hyd1 ? state.hyd1.totalH : 0);
-  const Q_ls    = state.hyd1 ? state.hyd1.Q_design : parseFloat(document.getElementById('q-design').value) || 2.30;
-  const fluid   = readFluid();
-
-  const TDH   = HydEngine.pumpTDH(dz, losses, pReq);
-  const { P_hyd, P_brake, P_hp } = HydEngine.pumpPower(Q_ls, fluid.rho, TDH, eta);
-  const NPSH  = HydEngine.npshAvailable(fluid, dzSucc, hfSucc);
-  const pump  = HydEngine.selectPump(P_hp);
-
-  state.hyd2 = { TDH, P_hyd, P_hp, P_hp_req: P_hp, pump, eta, NPSH, dz, pReq, losses, Q_ls };
-
-  // Auto-fill HYD-3
-  document.getElementById('h3-tdh').value = TDH.toFixed(3);
-  document.getElementById('h4-pump-hp').value = pump.hp;
-
-  // ── KPIs ──
-  document.getElementById('hyd2-kpis').innerHTML = [
-    { label:'TDH', value: TDH.toFixed(2), unit:'m c.a.', cls:'kpi-blue' },
-    { label:'P. hidráulica', value: (P_hyd/1000).toFixed(3), unit:'kW', cls:'kpi-teal' },
-    { label:'P. al freno', value: P_hp.toFixed(3), unit:'HP requeridos', cls:'kpi-orange' },
-    { label:'Bomba comercial', value: pump.label, unit:'centrífuga', cls:'kpi-green' },
-    { label:'NPSH disponible', value: NPSH.toFixed(2), unit:'m', cls: NPSH < 3 ? 'kpi-red' : 'kpi-green' },
-    { label:'Eficiencia η', value: (eta*100).toFixed(0), unit:'%', cls:'kpi-blue' },
-  ].map(k => `<div class="kpi-card ${k.cls}">
-    <div class="kpi-label">${k.label}</div>
-    <div class="kpi-value">${k.value}</div>
-    <div class="kpi-unit">${k.unit}</div>
-  </div>`).join('');
-
-  // ── Alerts ──
-  const alertsHtml = [
-    NPSH < 3 ? '<div class="alert alert-error">⚠ NPSH disponible < 3 m — riesgo de cavitación. Revisar instalación de succión.</div>' : '',
-    TDH > 30 ? '<div class="alert alert-warn">ℹ TDH > 30 m — verificar selección de bomba multietapa si es necesario.</div>' : '',
-    '<div class="alert alert-success">✓ Bomba ' + pump.label + ' centrífuga es suficiente para abastecer el Piso 5.</div>',
-  ].join('');
-  document.getElementById('hyd2-alerts').innerHTML = alertsHtml;
-
-  // ── Donut chart ──
-  const slices = state.hyd1
-    ? [
-        { label:'Altura estática', value: dz,                  color:'#1a4a7a' },
-        { label:'Pérd. fricción',  value: state.hyd1.totalHf,  color:'#1e6dbf' },
-        { label:'Pérd. menores',   value: state.hyd1.totalHm,  color:'#2e86de' },
-        { label:'Presión req.',    value: pReq,                 color:'#0d8a8a' },
-      ]
-    : [
-        { label:'Altura estática', value: dz,     color:'#1a4a7a' },
-        { label:'Pérd. totales',   value: losses,  color:'#1e6dbf' },
-        { label:'Presión req.',    value: pReq,    color:'#0d8a8a' },
-      ];
-  const donutNote = state.hyd1 ? '' : '<div class="alert alert-info" style="margin-top:8px;font-size:12px">ℹ Ejecute HYD-1 para ver desglose fricción vs pérdidas menores.</div>';
-  document.getElementById('hyd2-chart-donut').innerHTML = svgDonut(slices, TDH, 220, 220) + donutNote;
-
-  // ── Pump card ──
-  document.getElementById('hyd2-pump-card').innerHTML = `
-    <div style="background:var(--blue-900);color:white;border-radius:var(--r-lg);padding:20px">
-      <div style="font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Bomba Recomendada</div>
-      <div style="font-size:32px;font-weight:700;letter-spacing:-1px">${pump.label}</div>
-      <div style="font-size:14px;opacity:.8;margin-top:4px">Centrífuga monoetapa</div>
-      <div style="margin-top:16px;display:flex;flex-direction:column;gap:6px;font-size:13px">
-        <div>TDH = <strong>${TDH.toFixed(2)} m</strong></div>
-        <div>Q = <strong>${Q_ls.toFixed(3)} L/s</strong></div>
-        <div>P freno = <strong>${P_hp.toFixed(3)} HP</strong></div>
-        <div>NPSH disp. = <strong>${NPSH.toFixed(2)} m</strong></div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.2)">
-          Precio ref. = <strong>${fmt(pump.cost)} COP</strong>
-        </div>
-      </div>
-    </div>`;
-
-  document.getElementById('hyd2-output').style.display = 'block';
-  showToast('HYD-2 calculado — TDH: ' + TDH.toFixed(2) + ' m, Bomba: ' + pump.label);
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HYD-3: SIMULACIÓN HORARIA + VÁLVULAS
-// ══════════════════════════════════════════════════════════════
-function runHyd3() {
-  const TDH    = parseFloat(document.getElementById('h3-tdh').value) || (state.hyd2 ? state.hyd2.TDH : 30);
-  const Qdaily = parseFloat(document.getElementById('h3-qdaily').value) || 6300;
-  const Pmin   = parseFloat(document.getElementById('h3-pmin').value) || 10.0;
-  const Qref   = state.hyd1 ? state.hyd1.Q_design : 2.30;
-  const href   = state.hyd1 ? state.hyd1.totalH : 8.0;
-  const dz     = state.hyd2 ? state.hyd2.dz : 16.70;
-  const hourly = readHourly();
-
-  const rows = hourly.map(h => {
-    const Q = HydEngine.hourlyQ(h.pct, Qdaily, h.dur);
-    const losses = HydEngine.scaleLosses(href, Q, Qref);
-    const v_mont = Q / 1000 / (Math.PI * 0.0484 * 0.0484 / 4);
-    const P5 = HydEngine.pressureAtTop(TDH, dz, losses);
-    return { ...h, Q, losses, v_mont, P5, ok: P5 >= Pmin };
-  });
-  state.hyd3 = { rows, TDH, Pmin, dz, Qref, href };
-
-  // ── Combo chart ──
-  document.getElementById('hyd3-chart').innerHTML = svgComboChart(rows, Pmin);
-
-  // ── Table ──
-  let tHtml = `<table class="hourly-table">
-    <thead><tr>
-      <th>Franja</th><th>Horas</th><th>Q (L/s)</th>
-      <th>v montante (m/s)</th><th>Pérdidas (m)</th>
-      <th>P piso 5 (m.c.a.)</th><th>Estado</th>
-    </tr></thead><tbody>`;
-  rows.forEach(r => {
-    const cls = r.tipo === 'Pico' ? 'peak' : '';
-    const okCls = r.ok ? 'ok' : 'bad';
-    tHtml += `<tr>
-      <td><strong>${r.label}</strong></td>
-      <td class="${cls}">${r.horas}</td>
-      <td>${r.Q.toFixed(3)}</td>
-      <td>${r.v_mont.toFixed(3)}</td>
-      <td>${r.losses.toFixed(4)}</td>
-      <td class="${okCls}">${r.P5.toFixed(3)}</td>
-      <td class="${okCls}">${r.ok ? '✓ OK' : '✗ Insuficiente'}</td>
-    </tr>`;
-  });
-  tHtml += '</tbody></table>';
-  document.getElementById('hyd3-results-wrap').innerHTML = tHtml;
-
-  // ── Valve interactive panel ──
-  renderValvePanel(TDH, dz, href, Qref, Pmin);
-
-  document.getElementById('hyd3-output').style.display = 'block';
-  showToast('HYD-3 calculado — ' + rows.filter(r=>r.ok).length + '/7 franjas con presión suficiente');
-}
-
-// ── Valve panel (interactive) ─────────────────────────────────
-function renderValvePanel(TDH, dz, href, Qref, Pmin) {
-  const floors = [5,4,3,2,1];
-  // Pressure at each floor without valve restrictions
-  // Assume each floor taps ~20% of Q_design from the riser
-  const Q_design = Qref;
-
-  let html = '';
-  floors.forEach(f => {
-    const hPiso = (f-1) * 2.8 + 3.5; // elevation of this floor
-    html += `<div class="valve-floor-row" id="vrow-${f}">
-      <span class="floor-label">Piso ${f}</span>
-      <input type="range" id="valve-${f}" min="0" max="100" value="100" step="5"
-        oninput="updateValvePiso(${f},${TDH},${dz},${href},${Qref},${Pmin})">
-      <span class="slider-val" id="valve-val-${f}">100%</span>
-      <span id="valve-q-${f}" class="floor-q" style="font-size:12px;font-family:var(--font-mono)">—</span>
-      <span id="valve-p-${f}" class="floor-p" style="font-size:12px;font-family:var(--font-mono)">—</span>
-    </div>`;
-  });
-  document.getElementById('valve-rows').innerHTML = html;
-  // Initial calc
-  updateValveAll(TDH, dz, href, Qref, Pmin);
-}
-
-function updateValvePiso(floor, TDH, dz, href, Qref, Pmin) {
-  const pct = parseInt(document.getElementById(`valve-${floor}`).value);
-  document.getElementById(`valve-val-${floor}`).textContent = pct + '%';
-  updateValveAll(TDH, dz, href, Qref, Pmin);
-}
-
-function updateValveAll(TDH, dz, href, Qref, Pmin) {
-  const floors = [5,4,3,2,1];
-  const results = floors.map(f => {
-    const apertura = parseInt(document.getElementById(`valve-${f}`)?.value || 100) / 100;
-    // Partially-closed valve adds K ≈ 2 × (1/apertura² - 1) to that floor's branch
-    const K_extra = apertura > 0 ? 2 * (1/(apertura*apertura) - 1) : 999;
-    const Q_floor = (Qref / 5) * apertura; // floor takes proportional flow
-    const v_branch = Q_floor / 1000 / (Math.PI * 0.0254 * 0.0254 / 4);
-    const hm_valve = K_extra * (v_branch * v_branch) / (2 * 9.81);
-    const h_floor = HydEngine.scaleLosses(href, Q_floor * 5, Qref); // main riser losses
-    const elev = (f-1) * 2.8 + 3.5;
-    const P = TDH - elev - h_floor - hm_valve;
-    return { f, apertura, Q_floor, P, ok: P >= Pmin };
-  });
-
-  results.forEach(r => {
-    const qEl = document.getElementById(`valve-q-${r.f}`);
-    const pEl = document.getElementById(`valve-p-${r.f}`);
-    if (qEl) qEl.textContent = r.Q_floor.toFixed(3) + ' L/s';
-    if (pEl) {
-      pEl.textContent = r.P.toFixed(2) + ' m';
-      pEl.style.color = r.ok ? 'var(--green-500)' : 'var(--red-500)';
-    }
-  });
-
-  // Update valve chart
-  document.getElementById('valve-chart').innerHTML = svgValveBar(results, Pmin);
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HYD-4: COSTOS
-// ══════════════════════════════════════════════════════════════
-function runHyd4() {
-  const prices   = readPrices();
-  const pumpHP   = parseFloat(document.getElementById('h4-pump-hp').value) || (state.hyd2 ? state.hyd2.pump.hp : 1.0);
-  const nPoints  = parseFloat(document.getElementById('h4-points').value) || 105;
-  const pump     = HydEngine.selectPump(pumpHP);
-
-  // Calculate line items
-  const breakdown = prices.map(p => {
-    let subtotal;
-    if (p.item === 'Mano de obra / punto') {
-      subtotal = p.price * nPoints;
-    } else if (p.item === 'Tanque 23 m³') {
-      subtotal = p.price * 1;
-    } else if (p.item.startsWith('Tubería') || p.item.startsWith('Válvula') || p.item.startsWith('Codo') || p.item.startsWith('Tee') || p.item.startsWith('Redu')) {
-      subtotal = p.price * p.qty;
-    } else {
-      subtotal = p.price * p.qty;
-    }
-    return { ...p, subtotal };
-  });
-
-  // Override pump line with selected pump cost
-  // Find pump item or add it
-  let pumpLine = breakdown.find(b => b.item.includes('Tanque') === false && b.item.toLowerCase().includes('bomba'));
-  if (!pumpLine) {
-    breakdown.push({ item: `Bomba ${pump.label} centrífuga`, unit:'u', price:pump.cost, qty:1, subtotal:pump.cost });
-  } else {
-    pumpLine.subtotal = pump.cost;
-    pumpLine.item = `Bomba ${pump.label} centrífuga`;
-    pumpLine.price = pump.cost;
-  }
-
-  const total = breakdown.reduce((s, b) => s + b.subtotal, 0);
-  const perApto = total / 15;
-  state.hyd4 = { breakdown, total, perApto };
-
-  // ── Table ──
-  let tHtml = `<table>
-    <thead><tr><th>Ítem</th><th>Und.</th><th>Precio unit. (COP)</th><th>Cantidad</th><th>Subtotal (COP)</th><th>%</th></tr></thead>
-    <tbody>`;
-  breakdown.forEach(b => {
-    tHtml += `<tr>
-      <td>${b.item}</td>
-      <td style="color:var(--gray-500)">${b.unit}</td>
-      <td style="font-family:var(--font-mono)">${fmt(b.price)}</td>
-      <td>${b.qty}</td>
-      <td style="font-family:var(--font-mono);font-weight:600">${fmt(b.subtotal)}</td>
-      <td style="color:var(--gray-500)">${((b.subtotal/total)*100).toFixed(1)}%</td>
-    </tr>`;
-  });
-  tHtml += `</tbody><tfoot><tr>
-    <td colspan="4"><strong>TOTAL</strong></td>
-    <td style="font-family:var(--font-mono)"><strong>${fmt(total)}</strong></td>
-    <td></td>
-  </tr></tfoot></table>`;
-  document.getElementById('hyd4-results-wrap').innerHTML = tHtml;
-
-  // ── Donut ──
-  const colorPalette = ['#0c2340','#1a4a7a','#1e6dbf','#2e86de','#0d8a8a','#1a8a4a','#d4670a','#c0392b'];
-  const grouped = groupCostItems(breakdown);
-  document.getElementById('hyd4-chart-donut').innerHTML = svgDonut(
-    grouped.map((g, i) => ({ label: g.label, value: g.total, color: colorPalette[i % colorPalette.length] })),
-    total, 220, 220
-  );
-
-  // ── Total cards ──
-  document.getElementById('hyd4-totals').innerHTML = `
-    <div class="cost-total-card">
-      <div class="label">Costo total del sistema</div>
-      <div class="big-number" style="margin:12px 0">${fmt(total)}</div>
-      <div style="font-size:13px;opacity:.7">COP (pesos colombianos)</div>
-    </div>
-    <div class="cost-total-card" style="background:linear-gradient(135deg,var(--teal-500),var(--blue-700))">
-      <div class="label">Costo por apartamento</div>
-      <div class="big-number" style="margin:12px 0">${fmt(Math.round(perApto))}</div>
-      <div style="font-size:13px;opacity:.7">COP · 15 apartamentos</div>
-    </div>`;
-
-  document.getElementById('hyd4-output').style.display = 'block';
-  showToast('HYD-4 calculado — Total: ' + fmt(total) + ' COP');
-}
-
-function groupCostItems(breakdown) {
-  const groups = [
-    { label:'Tuberías',    match: i => i.item.startsWith('Tubería') },
-    { label:'Accesorios',  match: i => ['Codo','Tee','Válvula','Reducción'].some(k => i.item.startsWith(k)) },
-    { label:'Bomba',       match: i => i.item.toLowerCase().includes('bomba') },
-    { label:'Tanque',      match: i => i.item.includes('Tanque') },
-    { label:'Mano de obra',match: i => i.item.includes('Mano') },
-  ];
-  return groups.map(g => ({
-    label: g.label,
-    total: breakdown.filter(g.match).reduce((s, b) => s + b.subtotal, 0),
-  })).filter(g => g.total > 0);
-}
-
-// ══════════════════════════════════════════════════════════════
-//  EXPORT
-// ══════════════════════════════════════════════════════════════
-function doExport() {
-  const lines = [];
-  const now = new Date().toLocaleDateString('es-CO', {year:'numeric',month:'long',day:'numeric'});
-
-  lines.push('=== RESULTADOS DEL ANÁLISIS HIDRÁULICO ===');
-  lines.push('Proyecto: Sistema Hidráulico — Edificio Residencial 5 Pisos, Bogotá D.C.');
-  lines.push(`Fecha: ${now}`);
-  lines.push('Autores: M.A. Casas · L.F. Lasso · I.D. Lora · N. Valencia');
-  lines.push('Universidad de La Sabana — Ing. Química — Fenómenos de Transporte 2026');
-  lines.push('');
-
-  lines.push('── PARÁMETROS DEL EDIFICIO ──────────────────────────────────────────────');
-  lines.push('Pisos: 5 | Aptos/piso: 3 | Personas/apto: 3 | Total: 45 hab.');
-  lines.push('Consumo per cápita: 140 L/hab·día | Consumo total: 6,300 L/día');
-  lines.push('Tanque de almacenamiento: 22,680 L (3 días + 20% seg.)');
-  lines.push('Caudal de diseño: 2.30 L/s (225 UH → tabla Hunter / NTC 1500)');
-  lines.push('Agua @ 15°C: ρ = 999.1 kg/m³, μ = 1.138×10⁻³ Pa·s');
-  lines.push('Altitud Bogotá: 2,640 m.s.n.m. | P_atm = 74.66 kPa');
-  lines.push('');
-
-  if (state.hyd1) {
-    lines.push('── PÉRDIDAS POR TRAMO (HYD-1) ──────────────────────────────────────────');
-    lines.push('Tramo  | Q (L/s) | v (m/s) |   Re    |   f      | hf (m)  | ΣK  | hm (m)  | h_total (m)');
-    lines.push('-'.repeat(90));
-    state.hyd1.results.forEach((r, i) => {
-      const s = DEFAULT_SEGMENTS[i];
-      lines.push(
-        `${s.id.padEnd(6)} | ${s.Q_ls.toFixed(3).padStart(7)} | ${r.v.toFixed(3).padStart(7)} | ${Math.round(r.Re).toLocaleString().padStart(7)} | ${r.f.toFixed(5)} | ${r.hf.toFixed(4).padStart(7)} | ${s.K_total.toFixed(1).padStart(3)} | ${r.hm.toFixed(4).padStart(7)} | ${r.ht.toFixed(4)}`
-      );
-    });
-    lines.push('-'.repeat(90));
-    lines.push(`${'TOTAL'.padEnd(6)} |         |         |         |          | ${state.hyd1.totalHf.toFixed(4).padStart(7)} |     | ${state.hyd1.totalHm.toFixed(4).padStart(7)} | ${state.hyd1.totalH.toFixed(4)}`);
-    lines.push('');
-  }
-
-  if (state.hyd2) {
-    lines.push('── DIMENSIONAMIENTO DE BOMBA (HYD-2) ───────────────────────────────────');
-    lines.push(`Altura estática Δz          = ${state.hyd2.dz.toFixed(2)} m`);
-    lines.push(`Pérdidas totales del sistema = ${state.hyd2.losses.toFixed(4)} m`);
-    lines.push(`Presión requerida piso 5     = ${state.hyd2.pReq.toFixed(2)} m.c.a.`);
-    lines.push(`TDH (Cabeza Dinámica Total)  = ${state.hyd2.TDH.toFixed(3)} m`);
-    lines.push(`Potencia hidráulica          = ${(state.hyd2.P_hyd/1000).toFixed(3)} kW`);
-    lines.push(`Potencia al freno (η=${state.hyd2.eta}) = ${state.hyd2.P_hp.toFixed(4)} HP requeridos`);
-    lines.push(`Bomba seleccionada           = ${state.hyd2.pump.label} centrífuga`);
-    lines.push(`NPSH disponible              = ${state.hyd2.NPSH.toFixed(3)} m`);
-    lines.push('');
-    lines.push(`VERIFICACIÓN: TDH = Δz + Σpérd + P_req`);
-    lines.push(`  ${state.hyd2.TDH.toFixed(3)} = ${state.hyd2.dz.toFixed(2)} + ${state.hyd2.losses.toFixed(4)} + ${state.hyd2.pReq.toFixed(2)}`);
-    lines.push('');
-  }
-
-  if (state.hyd3) {
-    lines.push('── SIMULACIÓN HORARIA (HYD-3) ──────────────────────────────────────────');
-    lines.push('Franja            | Horas | Q (L/s) | Pérdidas (m) | P_piso5 (m.c.a.) | Estado');
-    lines.push('-'.repeat(80));
-    state.hyd3.rows.forEach(r => {
-      lines.push(`${r.label.padEnd(17)} | ${r.horas.padEnd(5)} | ${r.Q.toFixed(3).padStart(7)} | ${r.losses.toFixed(4).padStart(12)} | ${r.P5.toFixed(3).padStart(16)} | ${r.ok?'✓ OK':'✗ Insuficiente'}`);
-    });
-    lines.push('');
-  }
-
-  if (state.hyd4) {
-    lines.push('── ESTIMACIÓN DE COSTOS (HYD-4) ────────────────────────────────────────');
-    const groups = groupCostItems(state.hyd4.breakdown);
-    groups.forEach(g => lines.push(`  ${g.label.padEnd(15)}: ${fmt(g.total).padStart(18)} COP  (${((g.total/state.hyd4.total)*100).toFixed(1)}%)`));
-    lines.push('-'.repeat(52));
-    lines.push(`  ${'TOTAL'.padEnd(15)}: ${fmt(state.hyd4.total).padStart(18)} COP`);
-    lines.push(`  ${'Por apartamento'.padEnd(15)}: ${fmt(Math.round(state.hyd4.perApto)).padStart(18)} COP`);
-    lines.push('');
-  }
-
-  lines.push('─────────────────────────────────────────────────────────────────────────');
-  lines.push('Generado con Simulador Hidráulico — github.com/ismavid/hydraulic-building-simulator');
-
-  const text = lines.join('\n');
-  document.getElementById('export-text').value = text;
-
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => showToast('✓ Resultados copiados al portapapeles'));
-  } else {
-    const ta = document.getElementById('export-text');
-    ta.select();
-    showToast('Selecciona el texto y copia manualmente (Ctrl+C)');
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  SVG HELPERS
-// ══════════════════════════════════════════════════════════════
-
-function svgBarChart(data, opts) {
-  const W = opts.width || 700, H = opts.height || 260;
-  const margin = { top:20, right:20, bottom:50, left:55 };
-  const w = W - margin.left - margin.right;
-  const h = H - margin.top - margin.bottom;
-  const maxVal = Math.max(...data.map(d => d.total)) * 1.15 || 1;
-  const bw = (w / data.length) * 0.7;
-  const gap = w / data.length;
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
-    <defs>
-      <linearGradient id="gb1" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${opts.color1}" stop-opacity=".9"/>
-        <stop offset="100%" stop-color="${opts.color1}" stop-opacity=".6"/>
-      </linearGradient>
-      <linearGradient id="gb2" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${opts.color2}" stop-opacity=".9"/>
-        <stop offset="100%" stop-color="${opts.color2}" stop-opacity=".6"/>
-      </linearGradient>
-    </defs>
-    <g transform="translate(${margin.left},${margin.top})">`;
-
-  // Y gridlines
-  for (let i=0; i<=4; i++) {
-    const yy = h - (i/4) * h;
-    const val = (maxVal * i/4).toFixed(3);
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="10" fill="#6b7280">${val}</text>`;
-  }
-
-  // Bars
-  data.forEach((d, i) => {
-    const x = i * gap + gap * 0.15;
-    const h1 = (d.v1 / maxVal) * h;
-    const h2 = (d.v2 / maxVal) * h;
-    s += `<rect x="${x}" y="${h - h1 - h2}" width="${bw*0.48}" height="${h1+h2}" fill="url(#gb1)" rx="2"/>`;
-    s += `<rect x="${x + bw*0.52}" y="${h - h2}" width="${bw*0.48}" height="${h2}" fill="url(#gb2)" rx="2"/>`;
-    s += `<text x="${x + bw*0.5}" y="${h + 16}" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">${d.label}</text>`;
-    if (d.total > 0.001) {
-      s += `<text x="${x + bw*0.5}" y="${h - h1 - h2 - 4}" text-anchor="middle" font-size="9" fill="#374151">${d.total.toFixed(3)}</text>`;
-    }
-  });
-
-  // Axes
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-
-  // Y axis label
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="11" fill="#6b7280">Pérdida (m c.a.)</text>`;
-
-  // Legend
-  s += `<rect x="${w-160}" y="-16" width="12" height="12" fill="${opts.color1}" rx="2"/>
-    <text x="${w-145}" y="-6" font-size="10" fill="#374151">${opts.label1}</text>
-    <rect x="${w-80}" y="-16" width="12" height="12" fill="${opts.color2}" rx="2"/>
-    <text x="${w-65}" y="-6" font-size="10" fill="#374151">${opts.label2}</text>`;
-
-  s += '</g></svg>';
-  return s;
-}
-
-function svgGradientLine(results, segments, startHead) {
-  const W = 680, H = 220;
-  const margin = { top:20, right:20, bottom:40, left:55 };
-  const w = W - margin.left - margin.right;
-  const h = H - margin.top - margin.bottom;
-
-  // cumulative distance and pressure — start from TDH (full energy at pump outlet)
-  let cumDist = 0, cumLoss = 0;
-  const maxDist = segments.reduce((s, seg) => s + seg.L_m, 0) || 1;
-  const maxP = startHead * 1.1 || 1;
-  const points = [{ x: 0, y: startHead }];
-  results.forEach((r, i) => {
-    cumDist += segments[i].L_m;
-    cumLoss += r.ht;
-    points.push({ x: cumDist, y: startHead - cumLoss });
-  });
-
-  const px = d => (d.x / maxDist) * w;
-  const py = d => h - (Math.max(0, d.y) / maxP) * h;
-  const path = 'M ' + points.map(p => `${px(p)},${py(p)}`).join(' L ');
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
-    <g transform="translate(${margin.left},${margin.top})">`;
-
-  // Grid
-  for (let i=0; i<=4; i++) {
-    const yy = (i/4) * h;
-    const val = (maxP * (1 - i/4)).toFixed(2);
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="10" fill="#6b7280">${val}</text>`;
-  }
-
-  // Minimum pressure line
-  const ymin = h - (10 / maxP) * h;
-  s += `<line x1="0" y1="${ymin}" x2="${w}" y2="${ymin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="${w+2}" y="${ymin+4}" font-size="9" fill="#c0392b">P_mín</text>`;
-
-  // Gradient line
-  s += `<path d="${path}" fill="none" stroke="#1e6dbf" stroke-width="2.5" stroke-linejoin="round"/>`;
-  // Points
-  points.forEach(p => {
-    s += `<circle cx="${px(p)}" cy="${py(p)}" r="4" fill="#1e6dbf" stroke="white" stroke-width="1.5"/>`;
-  });
-
-  // Axes
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+30}" text-anchor="middle" font-size="11" fill="#6b7280">Distancia acumulada desde bomba (m)</text>`;
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-42" text-anchor="middle" font-size="11" fill="#6b7280">Presión disponible (m c.a.)</text>`;
-  s += '</g></svg>';
-  return s;
-}
-
-function svgDonut(slices, total, W, H) {
-  const cx = W/2, cy = H/2 - 20, R = Math.min(W,H)*0.32, r = R*0.55;
-  const totalVal = slices.reduce((s,sl) => s + sl.value, 0) || 1;
-  let angle = -Math.PI/2;
-
-  let paths = '', legends = '';
-  slices.forEach((sl, i) => {
-    const a = (sl.value / totalVal) * 2 * Math.PI;
-    const x1 = cx + R * Math.cos(angle), y1 = cy + R * Math.sin(angle);
-    const x2 = cx + R * Math.cos(angle+a), y2 = cy + R * Math.sin(angle+a);
-    const xi1 = cx + r * Math.cos(angle), yi1 = cy + r * Math.sin(angle);
-    const xi2 = cx + r * Math.cos(angle+a), yi2 = cy + r * Math.sin(angle+a);
-    const large = a > Math.PI ? 1 : 0;
-    paths += `<path d="M${xi1},${yi1} L${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z"
-      fill="${sl.color}" opacity=".9">
-      <title>${sl.label}: ${sl.value.toFixed(2)} m (${((sl.value/totalVal)*100).toFixed(1)}%)</title>
-    </path>`;
-    const ly = 12 + i * 18;
-    legends += `<rect x="${W-110}" y="${ly-10}" width="12" height="12" fill="${sl.color}" rx="2"/>
-      <text x="${W-94}" y="${ly}" font-size="10" fill="#374151">${sl.label} (${((sl.value/totalVal)*100).toFixed(0)}%)</text>`;
-    angle += a;
-  });
-
-  const label = typeof total === 'number' ? total.toFixed(2) : total;
-  return `<svg viewBox="0 0 ${W} ${H+40}" style="width:100%;max-width:${W}px">
-    ${paths}
-    <text x="${cx}" y="${cy}" text-anchor="middle" font-size="22" font-weight="700" fill="#0c2340">${label}</text>
-    <text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="11" fill="#6b7280">m c.a. / total</text>
-    ${legends}
-  </svg>`;
-}
-
-function svgComboChart(rows, Pmin) {
-  const W=680, H=260, margin={top:30,right:60,bottom:60,left:55};
-  const w=W-margin.left-margin.right, h=H-margin.top-margin.bottom;
-  const maxQ = Math.max(...rows.map(r=>r.Q)) * 1.3 || 1;
-  const minP = Math.min(...rows.map(r=>r.P5)) * 0.85;
-  const maxP = Math.max(...rows.map(r=>r.P5)) * 1.15 || 1;
-  const bw = (w / rows.length) * 0.6;
-  const gap = w / rows.length;
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
-    <g transform="translate(${margin.left},${margin.top})">`;
-
-  // Q bars
-  rows.forEach((r, i) => {
-    const bh = (r.Q / maxQ) * h;
-    const x = i * gap + gap * 0.2;
-    const color = r.tipo==='Pico' ? '#1a4a7a' : r.tipo==='Normal' ? '#2e86de' : '#a8d4f5';
-    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="2" opacity=".85">
-      <title>${r.label}: ${r.Q.toFixed(3)} L/s</title></rect>`;
-    s += `<text x="${x+bw/2}" y="${h+14}" text-anchor="middle" font-size="9" fill="#374151" transform="rotate(-30,${x+bw/2},${h+14})">${r.horas}</text>`;
-  });
-
-  // Pressure line (right axis scaled to h)
-  const pScale = v => h - ((v - minP) / (maxP - minP)) * h;
-  const pPoints = rows.map((r, i) => `${i * gap + gap * 0.5},${pScale(r.P5)}`).join(' ');
-  s += `<polyline points="${pPoints}" fill="none" stroke="#0d8a8a" stroke-width="2.5" stroke-linejoin="round"/>`;
-  rows.forEach((r, i) => {
-    s += `<circle cx="${i * gap + gap * 0.5}" cy="${pScale(r.P5)}" r="4" fill="${r.ok?'#0d8a8a':'#c0392b'}" stroke="white" stroke-width="1.5"><title>${r.label}: P = ${r.P5.toFixed(2)} m.c.a. (${r.ok?'✓ OK':'✗ Insuficiente'})</title></circle>`;
-  });
-
-  // Pmin line
-  const yPmin = pScale(Pmin);
-  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="6,3"/>
-    <text x="${w+4}" y="${yPmin+4}" font-size="9" fill="#c0392b">${Pmin}m</text>`;
-
-  // Left axis (Q)
-  for (let i=0; i<=3; i++) {
-    const yy = h - (i/3)*h;
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb" stroke-width="1"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="9" fill="#6b7280">${(maxQ*i/3).toFixed(2)}</text>`;
-  }
-  // Right axis (P)
-  for (let i=0; i<=3; i++) {
-    const yy = h - (i/3)*h;
-    const pv = minP + (maxP - minP) * i/3;
-    s += `<text x="${w+6}" y="${yy+4}" font-size="9" fill="#0d8a8a">${pv.toFixed(1)}</text>`;
-  }
-
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+44}" text-anchor="middle" font-size="10" fill="#6b7280">Franja horaria</text>`;
-  s += `<text transform="rotate(-90)" x="${-h/2}" y="-40" text-anchor="middle" font-size="10" fill="#374151">Caudal (L/s)</text>`;
-  s += `<text transform="rotate(90)" x="${h/2}" y="${-w-42}" text-anchor="middle" font-size="10" fill="#0d8a8a">Presión piso 5 (m.c.a.)</text>`;
-
-  // Legend
-  s += `<rect x="0" y="-22" width="10" height="10" fill="#1a4a7a" rx="1"/>
-    <text x="14" y="-13" font-size="9" fill="#374151">Q pico</text>
-    <rect x="60" y="-22" width="10" height="10" fill="#2e86de" rx="1"/>
-    <text x="74" y="-13" font-size="9" fill="#374151">Q normal</text>
-    <line x1="120" y1="-17" x2="140" y2="-17" stroke="#0d8a8a" stroke-width="2"/>
-    <text x="144" y="-13" font-size="9" fill="#0d8a8a">P piso 5</text>`;
-
-  s += '</g></svg>';
-  return s;
-}
-
-function svgValveBar(results, Pmin) {
-  const W=600, H=200, margin={top:20,right:30,bottom:40,left:55};
-  const w=W-margin.left-margin.right, h=H-margin.top-margin.bottom;
-  const maxP = Math.max(Pmin*1.5, ...results.map(r=>Math.max(0,r.P))) || 1;
-  const bw = (w / results.length) * 0.6;
-  const gap = w / results.length;
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px">
-    <g transform="translate(${margin.left},${margin.top})">`;
-
-  results.forEach((r, i) => {
-    const bh = (Math.max(0,r.P) / maxP) * h;
-    const x = i * gap + gap * 0.2;
-    const color = r.ok ? '#1a8a4a' : '#c0392b';
-    s += `<rect x="${x}" y="${h-bh}" width="${bw}" height="${bh}" fill="${color}" rx="3" opacity=".8"/>`;
-    s += `<text x="${x+bw/2}" y="${h-bh-4}" text-anchor="middle" font-size="10" fill="#374151">${r.P.toFixed(1)}</text>`;
-    s += `<text x="${x+bw/2}" y="${h+16}" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">Piso ${r.f}</text>`;
-  });
-
-  const yPmin = h - (Pmin/maxP)*h;
-  s += `<line x1="0" y1="${yPmin}" x2="${w}" y2="${yPmin}" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="5,3"/>
-    <text x="${w+2}" y="${yPmin+4}" font-size="9" fill="#c0392b">P_mín</text>`;
-
-  for (let i=0; i<=4; i++) {
-    const yy = h - (i/4)*h;
-    s += `<line x1="0" y1="${yy}" x2="${w}" y2="${yy}" stroke="#e5e7eb"/>
-      <text x="-6" y="${yy+4}" text-anchor="end" font-size="9" fill="#6b7280">${(maxP*i/4).toFixed(1)}</text>`;
-  }
-  s += `<line x1="0" y1="${h}" x2="${w}" y2="${h}" stroke="#374151" stroke-width="1.5"/>
-    <line x1="0" y1="0" x2="0" y2="${h}" stroke="#374151" stroke-width="1.5"/>`;
-  s += `<text x="${w/2}" y="${h+32}" text-anchor="middle" font-size="10" fill="#6b7280">Presión disponible por piso (m c.a.)</text>`;
-  s += '</g></svg>';
-  return s;
-}
-
-// ══════════════════════════════════════════════════════════════
-//  RUN ALL
-// ══════════════════════════════════════════════════════════════
-function runAll() {
-  const btn = document.getElementById('run-all-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Calculando…'; }
-
-  // Ensure all cards are open
-  ['card-hyd1','card-hyd2','card-hyd3','card-hyd4'].forEach(id => {
-    const card = document.getElementById(id);
-    if (!card) return;
-    const body = card.querySelector('.card-body');
-    const header = card.querySelector('.card-header');
-    const toggle = card.querySelector('.card-toggle');
-    if (body && !body.classList.contains('open')) {
-      body.classList.add('open');
-      header && header.classList.add('open');
-      toggle && (toggle.textContent = '▲ Colapsar');
-    }
-  });
-
-  runHyd1();
-  runHyd2();
-  runHyd3();
-  runHyd4();
-
-  if (btn) { btn.disabled = false; btn.textContent = '▶▶ Ejecutar Todo (HYD-1 → 4)'; }
-  showToast('✓ Todos los módulos calculados con valores por defecto');
-}
-
-// ══════════════════════════════════════════════════════════════
-//  HOURLY SUM BADGE
-// ══════════════════════════════════════════════════════════════
-function updateHourlyBadge() {
-  const badge = document.getElementById('hourly-pct-badge');
-  if (!badge) return;
-  let sum = 0;
-  DEFAULT_HOURLY.forEach((_, idx) => {
-    const el = document.querySelector(`[data-hour="${idx}"][data-field="pct"]`);
-    if (el) sum += parseFloat(el.value) || 0;
-  });
-  const pct = (sum * 100).toFixed(1);
-  const ok = Math.abs(sum - 1.0) < 0.001;
-  badge.textContent = `Σ = ${pct}%`;
-  badge.className = 'pct-badge ' + (ok ? 'pct-ok' : 'pct-bad');
-}
-
-// ══════════════════════════════════════════════════════════════
-//  BUILDING SCHEMATIC SVG
-// ══════════════════════════════════════════════════════════════
-function svgBuildingSchematic() {
-  const W = 500, H = 600;
-  // Layout: building left side, labels right side
-  const wallX = 80, wallW = 220;
-  const sotanoY = 520, sotanoH = 60;
-  const pisoH = 76; // px per floor
-  const piso1Y = sotanoY - pisoH;
-
-  // Floor Y positions (top of each floor slab)
-  const floorY = f => sotanoY - f * pisoH; // f=1..5
-
-  // Riser pipe x center
-  const riserX = wallX + 40;
-  const riserTop = floorY(5) - 10;
-  const riserBot = sotanoY;
-
-  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;font-family:Inter,sans-serif">
-    <defs>
-      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L8,3 Z" fill="#1e6dbf"/>
-      </marker>
-      <marker id="arrS" markerWidth="6" markerHeight="6" refX="5" refY="2" orient="auto">
-        <path d="M0,0 L0,4 L6,2 Z" fill="#0d8a8a"/>
-      </marker>
-    </defs>
-
-    <!-- Background -->
-    <rect width="${W}" height="${H}" fill="#f9fafb"/>
-
-    <!-- Title -->
-    <text x="${W/2}" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#0c2340">
-      Esquema Hidráulico — Edificio 5 Pisos, Bogotá D.C.
-    </text>`;
-
-  // Draw floors (5 pisos + sótano)
+  // Bomba
+  const TDH = HydEngine.pumpTDH(DZ_TOTAL, totalH, P_REQ);
+  const { P_hyd, P_brake, P_hp } = HydEngine.pumpPower(Q_total, FLUID.rho, TDH, ETA);
+  const pump = HydEngine.selectPump(P_hp);
+  const NPSH = HydEngine.npshAvailable(FLUID, 0, 0.2);
+
+  // Presión en cada piso
+  // Pérdidas acumuladas en la montante hasta alcanzar el piso f
+  const cumLoss = {};
+  cumLoss[1] = results[0].ht + results[1].ht;
+  cumLoss[2] = cumLoss[1] + results[2].ht;
+  cumLoss[3] = cumLoss[2] + results[3].ht;
+  cumLoss[4] = cumLoss[3] + results[4].ht;
+  cumLoss[5] = cumLoss[4] + results[5].ht;
+
+  const pressures = {};
   for (let f = 1; f <= 5; f++) {
-    const y = floorY(f);
-    // Floor slab
-    s += `<rect x="${wallX}" y="${y}" width="${wallW}" height="6" fill="#374151" rx="1"/>`;
-    // Floor walls (vertical lines)
-    s += `<line x1="${wallX}" y1="${y+6}" x2="${wallX}" y2="${y+pisoH}" stroke="#374151" stroke-width="2"/>`;
-    s += `<line x1="${wallX+wallW}" y1="${y+6}" x2="${wallX+wallW}" y2="${y+pisoH}" stroke="#374151" stroke-width="2"/>`;
-    // Floor label
-    s += `<text x="${wallX+wallW+14}" y="${y+pisoH/2+5}" font-size="12" font-weight="600" fill="#374151">Piso ${f}</text>`;
-    // Height dimension
+    pressures[f] = TDH - Z_PISO(f) - cumLoss[f];
+  }
+
+  // Nivel del tanque (reserva a Q actual)
+  const Q_m3h = Q_total * 3.6; // L/s → m³/h × 1000 = L/h
+  const tankHours = TANK_VOL / Math.max(Q_m3h * 1000 / 3600 * 3600, 1);
+  // Usamos L/h = Q_total(L/s) × 3600
+  const Lph = Q_total * 3600;
+  const tankHrs = TANK_VOL / Math.max(Lph, 0.1);
+  const tankPct = Math.min(1, Math.max(0, 1 - Lph / TANK_VOL));
+
+  // Velocidad en montante (T1)
+  const v_mont = results[0].v;
+  const P_sel  = pressures[sim.pisoSel];
+
+  // ── Actualizar toda la UI ──
+  updateBuildingViz(results, pressures, Q_total, Q_floor, segments);
+  updateMetrics(Q_total, TDH, P_hyd, P_brake, P_hp, pump, NPSH, totalHf, totalHm, totalH, P_sel, tankPct, tankHrs, activeF, Q_apto);
+  updateFloorTable(results, pressures, cumLoss, segments);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONSTRUIR SVG DEL EDIFICIO (se llama una vez)
+// ═══════════════════════════════════════════════════════════
+function buildBuildingSVG() {
+  // Geometría
+  const W = 400, H = 540;
+  const bL = 75, bR = 310;   // límites horizontales del edificio
+  const rX = 100;             // x de la montante
+  const FLOOR_H = 76;         // px por piso
+  const SOT_Y = 450, SOT_H = 72;  // sótano
+  const F_TOP = { 5:60, 4:136, 3:212, 2:288, 1:364 }; // top slab y de cada piso
+  const F_BOT = { 5:136, 4:212, 3:288, 2:364, 1:440 };
+  const bY = f => (F_TOP[f] + F_BOT[f]) / 2; // center y de cada piso
+
+  let s = `<defs>
+    <filter id="glow-cyan"><feGaussianBlur stdDeviation="3" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter>
+    <filter id="glow-pump"><feGaussianBlur stdDeviation="5" result="blur"/><feComposite in="SourceGraphic" in2="blur" operator="over"/></filter>
+    <linearGradient id="grad-water" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#0e7490"/><stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>`;
+
+  // Fondo edificio
+  s += `<rect x="${bL}" y="${F_TOP[5]}" width="${bR-bL}" height="${SOT_Y+SOT_H-F_TOP[5]}" fill="#1a1d27" rx="2"/>`;
+
+  // Pisos
+  for (let f = 5; f >= 1; f--) {
+    const y0 = F_TOP[f], y1 = F_BOT[f];
+    // Highlight del piso seleccionado
+    s += `<rect id="hl-${f}" x="${bL+1}" y="${y0+4}" width="${bR-bL-2}" height="${y1-y0-4}" fill="transparent" rx="0"/>`;
+    // Losa
+    s += `<rect x="${bL}" y="${y0}" width="${bR-bL}" height="5" fill="#2d333b"/>`;
+    // Etiqueta piso
+    const lx = bR + 14;
+    s += `<text x="${lx}" y="${bY(f)-4}" fill="#6e7681" font-size="11" font-weight="600" font-family="Outfit,sans-serif">Piso ${f}</text>`;
+    // Presión (actualizada por JS)
+    s += `<text id="pres-${f}" x="${lx}" y="${bY(f)+10}" fill="#444c56" font-size="9" font-family="'JetBrains Mono',monospace">— m</text>`;
+    // Altura entre pisos (solo entre pisos, no en P5)
     if (f < 5) {
-      s += `<text x="${wallX-8}" y="${y+pisoH/2+4}" text-anchor="end" font-size="9" fill="#6b7280">2.80 m</text>`;
+      s += `<text x="${bL-4}" y="${y0+3}" text-anchor="end" fill="#30363d" font-size="8" font-family="Outfit,sans-serif">2.80m</text>`;
     }
   }
 
   // Sótano
-  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="${sotanoH}" fill="#e5e7eb" rx="2"/>`;
-  s += `<rect x="${wallX}" y="${sotanoY}" width="${wallW}" height="6" fill="#374151" rx="1"/>`;
-  s += `<text x="${wallX+wallW+14}" y="${sotanoY+sotanoH/2+5}" font-size="12" font-weight="600" fill="#374151">Sótano</text>`;
-  s += `<text x="${wallX-8}" y="${sotanoY+sotanoH/2}" text-anchor="end" font-size="9" fill="#6b7280">3.50 m</text>`;
+  s += `<rect x="${bL}" y="${SOT_Y}" width="${bR-bL}" height="${SOT_H}" fill="#161b22"/>`;
+  s += `<rect x="${bL}" y="${SOT_Y}" width="${bR-bL}" height="5" fill="#2d333b"/>`;
+  s += `<text x="${bR+14}" y="${SOT_Y+SOT_H/2+4}" fill="#6e7681" font-size="11" font-family="Outfit,sans-serif">Sótano</text>`;
+  s += `<text x="${bL-4}" y="${SOT_Y+3}" text-anchor="end" fill="#30363d" font-size="8" font-family="Outfit,sans-serif">3.50m</text>`;
 
-  // Total height annotation
-  s += `<line x1="${wallX-28}" y1="${riserTop}" x2="${wallX-28}" y2="${sotanoY+sotanoH}" stroke="#9ca3af" stroke-width="1" stroke-dasharray="3,2"/>`;
-  s += `<text x="${wallX-30}" y="${(riserTop + sotanoY+sotanoH)/2}" text-anchor="end" font-size="9" fill="#6b7280" transform="rotate(-90,${wallX-30},${(riserTop + sotanoY+sotanoH)/2})">Δz = 16.70 m</text>`;
+  // Montante principal (tubería de fondo gris)
+  const riserTop = F_TOP[5], riserBot = SOT_Y + SOT_H - 8;
+  s += `<line x1="${rX}" y1="${riserTop}" x2="${rX}" y2="${riserBot}" stroke="#2d333b" stroke-width="8" stroke-linecap="round"/>`;
+  // Agua animada en montante
+  s += `<line id="water-riser" x1="${rX}" y1="${riserTop}" x2="${rX}" y2="${riserBot}" stroke="#22d3ee" stroke-width="5" stroke-linecap="round" stroke-dasharray="8 5" class="water-line" opacity="0.8"/>`;
 
-  // Riser pipe (montante) — 2" (blue)
-  s += `<rect x="${riserX-5}" y="${riserTop}" width="10" height="${riserBot - riserTop}" fill="#93c5fd" stroke="#1e6dbf" stroke-width="1.5" rx="3"/>`;
-  // Flow arrows up the riser
-  [3,2,1].forEach(f => {
-    const ay = floorY(f) + pisoH * 0.5;
-    s += `<line x1="${riserX}" y1="${ay+10}" x2="${riserX}" y2="${ay-10}" stroke="#1e6dbf" stroke-width="1.5" marker-end="url(#arr)"/>`;
-  });
-
-  // Diameter label on riser
-  s += `<text x="${riserX+8}" y="${floorY(3)+10}" font-size="9" fill="#1e6dbf" font-weight="600">2" → 1½"</text>`;
-
-  // Tees + horizontal branches at each floor
-  const branchColors = { 1:'#374151', 2:'#374151', 3:'#374151', 4:'#374151', 5:'#c0392b' };
-  for (let f = 1; f <= 5; f++) {
-    const y = floorY(f) + pisoH * 0.55;
-    const bx2 = wallX + wallW - 20;
-    const diam = f >= 3 ? '1½"' : f === 1 ? '1"' : '1"';
-
-    // Tee symbol
-    s += `<circle cx="${riserX}" cy="${y}" r="4" fill="${f===5?'#c0392b':'#1a4a7a'}" stroke="white" stroke-width="1"/>`;
-
-    // Horizontal branch
-    s += `<line x1="${riserX+4}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="${f===5?2.5:1.5}" stroke-dasharray="${f===5?'none':'4,2'}"/>`;
-    s += `<line x1="${bx2-8}" y1="${y}" x2="${bx2}" y2="${y}" stroke="${branchColors[f]}" stroke-width="1.5" marker-end="url(#arrS)"/>`;
-
-    // Branch diameter label
-    const diamLabel = f <= 2 ? '1"' : f <= 4 ? '1"' : '¾"→½"';
-    s += `<text x="${riserX + (bx2-riserX)/2}" y="${y-5}" text-anchor="middle" font-size="8" fill="${f===5?'#c0392b':'#6b7280'}">${diamLabel}</text>`;
-
-    // Apt label
-    s += `<text x="${bx2+6}" y="${y+4}" font-size="9" fill="${f===5?'#c0392b':'#374151'}">3 aptos</text>`;
+  // Derivaciones por piso
+  for (let f = 5; f >= 1; f--) {
+    const by = bY(f);
+    const bxEnd = bR - 18;
+    // Tubo fondo
+    s += `<line id="pipe-branch-${f}" x1="${rX+4}" y1="${by}" x2="${bxEnd}" y2="${by}" stroke="#2d333b" stroke-width="5" stroke-linecap="round"/>`;
+    // Agua animada
+    s += `<line id="water-branch-${f}" x1="${rX+4}" y1="${by}" x2="${bxEnd}" y2="${by}" stroke="#22d3ee" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 5" class="water-line water-branch" opacity="0.4"/>`;
+    // Tee
+    s += `<circle id="tee-${f}" cx="${rX}" cy="${by}" r="5" fill="#21262d" stroke="#22d3ee" stroke-width="1.5" opacity="0.6"/>`;
+    // Indicadores de aparatos (7 puntos al final del ramal)
+    const dotXStart = bR - 100;
+    FIXTURES.forEach((fix, i) => {
+      const dx = dotXStart + i * 12;
+      s += `<circle id="fix-dot-${f}-${fix.id}" cx="${dx}" cy="${by}" r="3.5" fill="#21262d" stroke="#30363d" stroke-width="1"/>`;
+    });
   }
 
-  // Pump (sótano)
-  const pumpX = riserX, pumpY = sotanoY + 32;
-  s += `<ellipse cx="${pumpX}" cy="${pumpY}" rx="16" ry="12" fill="#0d8a8a" opacity=".9"/>`;
-  s += `<text x="${pumpX}" y="${pumpY+4}" text-anchor="middle" font-size="9" font-weight="700" fill="white">BOMBA</text>`;
-  s += `<text x="${pumpX}" y="${pumpY+18}" text-anchor="middle" font-size="8" fill="#0d8a8a">1.5 HP</text>`;
+  // Punto más desfavorable (P5, Apto 3)
+  s += `<circle cx="${bR-18}" cy="${bY(5)}" r="6" fill="#f85149" opacity="0.8"/>`;
+  s += `<line x1="${bR-18}" y1="${bY(5)-10}" x2="${bR-18}" y2="${bY(5)-4}" stroke="#f85149" stroke-width="1.5"/>`;
 
-  // Tank (sótano)
-  const tankX = wallX + wallW - 55, tankY = sotanoY + 8, tankW = 50, tankH = 44;
-  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="${tankH}" fill="#dbeafe" stroke="#1e6dbf" stroke-width="1.5" rx="3"/>`;
-  s += `<rect x="${tankX}" y="${tankY}" width="${tankW}" height="8" fill="#93c5fd" rx="3"/>`;
-  s += `<text x="${tankX+tankW/2}" y="${tankY+24}" text-anchor="middle" font-size="8" font-weight="600" fill="#1a4a7a">TANQUE</text>`;
-  s += `<text x="${tankX+tankW/2}" y="${tankY+36}" text-anchor="middle" font-size="8" fill="#1a4a7a">22,680 L</text>`;
+  // Tanque
+  const tkX = rX + 55, tkY = SOT_Y + 8, tkW = 75, tkH = 52;
+  s += `<rect x="${tkX}" y="${tkY}" width="${tkW}" height="${tkH}" fill="none" stroke="#30363d" stroke-width="1.5" rx="3"/>`;
+  // Fill (actualizado por JS)
+  s += `<rect id="svg-tank-fill" x="${tkX+1}" y="${tkY+tkH-2}" width="${tkW-2}" height="2" fill="url(#grad-water)" rx="2" opacity="0.85"/>`;
+  s += `<text x="${tkX+tkW/2}" y="${tkY+tkH+13}" text-anchor="middle" fill="#444c56" font-size="8" font-family="Outfit,sans-serif">TANQUE</text>`;
+  s += `<text id="svg-tank-pct" x="${tkX+tkW/2}" y="${tkY+tkH/2+4}" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="700" font-family="Outfit,sans-serif">—</text>`;
 
-  // Supply pipe from tank to pump
-  s += `<line x1="${tankX}" y1="${pumpY}" x2="${pumpX+16}" y2="${pumpY}" stroke="#1e6dbf" stroke-width="2" stroke-dasharray="4,2"/>`;
+  // Tubería succión tanque → bomba
+  const pumpX = rX, pumpY = SOT_Y + 40;
+  s += `<line x1="${tkX}" y1="${pumpY}" x2="${pumpX+15}" y2="${pumpY}" stroke="#2d333b" stroke-width="4" stroke-linecap="round"/>`;
+  s += `<line id="water-suction" x1="${tkX}" y1="${pumpY}" x2="${pumpX+15}" y2="${pumpY}" stroke="#22d3ee" stroke-width="2.5" stroke-dasharray="5 4" class="water-line" opacity="0.6"/>`;
 
-  // Point most unfavorable — Piso 5, Apto 3
-  const px5 = wallX + wallW - 14, py5 = floorY(5) + pisoH * 0.55;
-  s += `<circle cx="${px5}" cy="${py5}" r="6" fill="#c0392b" stroke="white" stroke-width="1.5"/>`;
-  s += `<text x="${px5+10}" y="${py5-8}" font-size="9" fill="#c0392b" font-weight="600">Punto más</text>`;
-  s += `<text x="${px5+10}" y="${py5+3}" font-size="9" fill="#c0392b" font-weight="600">desfavorable</text>`;
-  s += `<text x="${px5+10}" y="${py5+14}" font-size="8" fill="#c0392b">(Ducha, P5 Apto 3)</text>`;
+  // Bomba
+  s += `<circle id="pump-glow" cx="${pumpX}" cy="${pumpY}" r="18" fill="#22d3ee" class="pump-glow-anim" opacity="0.15"/>`;
+  s += `<circle cx="${pumpX}" cy="${pumpY}" r="14" fill="#21262d" stroke="#22d3ee" stroke-width="1.5"/>`;
+  // Impulsor giratorio
+  s += `<g id="pump-impeller" style="transform-origin:${pumpX}px ${pumpY}px" class="pump-spin">
+    <path d="M${pumpX-5} ${pumpY-9} Q${pumpX} ${pumpY-3} ${pumpX-9} ${pumpY+5}" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"/>
+    <path d="M${pumpX+5} ${pumpY-9} Q${pumpX} ${pumpY-3} ${pumpX+9} ${pumpY+5}" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"/>
+    <path d="M${pumpX-9} ${pumpY} Q${pumpX} ${pumpY+6} ${pumpX} ${pumpY+9}" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round"/>
+  </g>`;
+  s += `<text x="${pumpX}" y="${pumpY+28}" text-anchor="middle" fill="#444c56" font-size="8" font-family="Outfit,sans-serif">BOMBA</text>`;
 
-  // Legend
-  const lx = 10, ly = H - 80;
-  s += `<rect x="${lx}" y="${ly}" width="120" height="72" fill="white" stroke="#d1d5db" stroke-width="1" rx="4"/>`;
-  s += `<rect x="${lx+6}" y="${ly+8}" width="10" height="6" fill="#93c5fd" stroke="#1e6dbf" stroke-width="1" rx="1"/>`;
-  s += `<text x="${lx+20}" y="${ly+15}" font-size="9" fill="#374151">Montante (2"→1½")</text>`;
-  s += `<line x1="${lx+6}" y1="${ly+26}" x2="${lx+16}" y2="${ly+26}" stroke="#374151" stroke-width="1.5" stroke-dasharray="3,2"/>`;
-  s += `<text x="${lx+20}" y="${ly+30}" font-size="9" fill="#374151">Ramales piso (1")</text>`;
-  s += `<line x1="${lx+6}" y1="${ly+42}" x2="${lx+16}" y2="${ly+42}" stroke="#c0392b" stroke-width="2"/>`;
-  s += `<text x="${lx+20}" y="${ly+46}" font-size="9" fill="#c0392b">Tramo desfavorable</text>`;
-  s += `<ellipse cx="${lx+11}" cy="${ly+58}" rx="7" ry="5" fill="#0d8a8a"/>`;
-  s += `<text x="${lx+20}" y="${ly+62}" font-size="9" fill="#374151">Bomba centrífuga</text>`;
+  // Acotación altura total
+  const azX = bL - 22;
+  s += `<line x1="${azX}" y1="${F_TOP[5]}" x2="${azX}" y2="${pumpY}" stroke="#30363d" stroke-width="1"/>`;
+  s += `<line x1="${azX-3}" y1="${F_TOP[5]}" x2="${azX+3}" y2="${F_TOP[5]}" stroke="#30363d" stroke-width="1"/>`;
+  s += `<line x1="${azX-3}" y1="${pumpY}" x2="${azX+3}" y2="${pumpY}" stroke="#30363d" stroke-width="1"/>`;
+  s += `<text fill="#30363d" font-size="8" font-family="Outfit,sans-serif" text-anchor="middle" transform="rotate(-90,${azX-8},${(F_TOP[5]+pumpY)/2})">Δz = 16.70 m</text>`;
 
-  s += '</svg>';
-  return s;
+  document.getElementById('building-svg').innerHTML = s;
 }
 
-// ══════════════════════════════════════════════════════════════
-//  UTILS
-// ══════════════════════════════════════════════════════════════
-function fmt(n) {
-  return '$' + Math.round(n).toLocaleString('es-CO');
+// ═══════════════════════════════════════════════════════════
+//  ACTUALIZAR VISUALIZACIÓN DEL EDIFICIO
+// ═══════════════════════════════════════════════════════════
+function updateBuildingViz(results, pressures, Q_total, Q_floor, segments) {
+  const svgEl = document.getElementById('building-svg');
+  if (!svgEl) return;
+
+  // Velocidad de animación proporcional al caudal (más Q = más rápido)
+  const speed = Math.max(0.25, 1.8 - (Q_total / Q_DESIGN) * 1.4);
+  svgEl.style.setProperty('--flow-spd', speed + 's');
+
+  // Opacidad del flujo en montante
+  const riserOpacity = Math.min(0.9, 0.3 + (Q_total / Q_DESIGN) * 0.6);
+  const waterRiser = document.getElementById('water-riser');
+  if (waterRiser) waterRiser.setAttribute('opacity', riserOpacity);
+
+  // Highlight del piso seleccionado
+  for (let f = 1; f <= 5; f++) {
+    const hl = document.getElementById(`hl-${f}`);
+    if (!hl) continue;
+    if (f === sim.pisoSel) {
+      hl.setAttribute('fill', 'rgba(34,211,238,0.07)');
+      hl.setAttribute('stroke', 'rgba(34,211,238,0.2)');
+      hl.setAttribute('stroke-width', '1');
+    } else {
+      hl.setAttribute('fill', 'transparent');
+      hl.removeAttribute('stroke');
+    }
+
+    // Opacidad de derivaciones
+    const wb = document.getElementById(`water-branch-${f}`);
+    const branchQ = Q_total / 5;
+    const bOpacity = f === sim.pisoSel
+      ? Math.min(0.85, 0.4 + (Q_floor / Q_DESIGN) * 0.45)
+      : Math.min(0.55, 0.2 + (branchQ / Q_DESIGN) * 0.35);
+    if (wb) wb.setAttribute('opacity', bOpacity);
+
+    // Tees
+    const tee = document.getElementById(`tee-${f}`);
+    if (tee) tee.setAttribute('opacity', f === sim.pisoSel ? '1' : '0.5');
+
+    // Presión en SVG
+    const presEl = document.getElementById(`pres-${f}`);
+    if (presEl) {
+      const p = pressures[f];
+      const color = p >= 10 ? '#3fb950' : p >= 7 ? '#d29922' : '#f85149';
+      presEl.textContent = p !== undefined ? p.toFixed(1) + ' m' : '—';
+      presEl.setAttribute('fill', color);
+    }
+
+    // Aparatos activos en el piso seleccionado
+    FIXTURES.forEach(fix => {
+      const dot = document.getElementById(`fix-dot-${f}-${fix.id}`);
+      if (!dot) return;
+      if (f === sim.pisoSel && sim.fixtures[fix.id]) {
+        dot.setAttribute('fill', '#22d3ee');
+        dot.setAttribute('stroke', 'rgba(34,211,238,0.5)');
+        dot.setAttribute('r', '4.5');
+        dot.setAttribute('filter', 'url(#glow-cyan)');
+      } else if (f === sim.pisoSel) {
+        dot.setAttribute('fill', '#2d333b');
+        dot.setAttribute('stroke', '#444c56');
+        dot.setAttribute('r', '3.5');
+        dot.removeAttribute('filter');
+      } else {
+        dot.setAttribute('fill', 'transparent');
+        dot.setAttribute('stroke', 'transparent');
+      }
+    });
+  }
+
+  // Tank fill en SVG (tkY=458, tkH=52, fill height 2-50)
+  const lph = Q_total * 3600;
+  const tankPctSVG = Math.min(1, Math.max(0.02, 1 - lph / TANK_VOL));
+  const tkFill = document.getElementById('svg-tank-fill');
+  const tkPct  = document.getElementById('svg-tank-pct');
+  if (tkFill) {
+    const TK_TOP = 458, TK_H = 52;
+    const h = Math.max(2, tankPctSVG * (TK_H - 2));
+    tkFill.setAttribute('height', h);
+    tkFill.setAttribute('y', TK_TOP + TK_H - h);
+  }
+  if (tkPct) tkPct.textContent = Math.round(tankPctSVG * 100) + '%';
 }
 
-function showToast(msg) {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2800);
+// ═══════════════════════════════════════════════════════════
+//  ACTUALIZAR PANEL DE MÉTRICAS
+// ═══════════════════════════════════════════════════════════
+function updateMetrics(Q_total, TDH, P_hyd, P_brake, P_hp, pump, NPSH,
+                        totalHf, totalHm, totalH, P_sel, tankPct, tankHrs,
+                        activeF, Q_apto) {
+  // Q live
+  animVal('live-q', Q_total.toFixed(3));
+
+  // Tank
+  const tBar = document.getElementById('tank-bar');
+  const tLine = document.getElementById('tank-level-line');
+  const pct = Math.min(100, Math.max(1, tankPct * 100));
+  if (tBar) tBar.style.height = pct + '%';
+  if (tLine) tLine.style.bottom = pct + '%';
+  animVal('tank-pct', Math.round(pct) + '%');
+  animVal('tank-vol', fmt0(Math.round(tankPct * TANK_VOL)) + ' L');
+  const hrsText = tankHrs > 99 ? '> 99 horas' : tankHrs.toFixed(1) + ' horas';
+  animVal('tank-hrs', hrsText + ' de reserva');
+
+  // Pump
+  animVal('pump-label', pump.label);
+  animVal('tdh-val', TDH.toFixed(2));
+  animVal('power-kw', (P_brake/1000).toFixed(3));
+  animVal('power-hp', P_hp.toFixed(2));
+  animVal('npsh-val', NPSH.toFixed(2));
+
+  // Pressure arc gauge
+  const P_MAX = 30; // m (arc full scale)
+  const arcLen = 157; // stroke-dasharray total
+  const arcVal = Math.min(P_sel, P_MAX);
+  const dashOffset = arcLen - (arcVal / P_MAX) * arcLen;
+  const arcFill = document.getElementById('pressure-arc-fill');
+  if (arcFill) {
+    arcFill.style.strokeDashoffset = Math.max(0, dashOffset);
+    arcFill.style.stroke = P_sel >= 10 ? '#22d3ee' : P_sel >= 7 ? '#d29922' : '#f85149';
+  }
+  const arcValEl = document.getElementById('pressure-arc-val');
+  if (arcValEl) arcValEl.textContent = P_sel !== undefined ? P_sel.toFixed(1) : '—';
+
+  const statusEl = document.getElementById('pressure-status');
+  if (statusEl) {
+    if (P_sel >= 10) {
+      statusEl.textContent = '✓ Presión suficiente';
+      statusEl.className = 'pressure-status ok';
+    } else if (P_sel >= 7) {
+      statusEl.textContent = '⚠ Presión baja';
+      statusEl.className = 'pressure-status warn';
+    } else {
+      statusEl.textContent = '✗ Presión insuficiente';
+      statusEl.className = 'pressure-status bad';
+    }
+  }
+
+  // Losses
+  const maxLoss = Math.max(totalHf + totalHm, 0.001);
+  animVal('loss-hf', totalHf.toFixed(3));
+  animVal('loss-hm', totalHm.toFixed(3));
+  animVal('loss-total', totalH.toFixed(3));
+  const barHf = document.getElementById('loss-bar-hf');
+  const barHm = document.getElementById('loss-bar-hm');
+  if (barHf) barHf.style.width = (totalHf/maxLoss*100) + '%';
+  if (barHm) barHm.style.width = (totalHm/maxLoss*100) + '%';
+
+  // Active flow bar
+  const afBar = document.getElementById('active-flow-bar');
+  const afText = document.getElementById('active-flow-text');
+  const dot = afBar?.querySelector('.flow-dot');
+  if (activeF.length > 0) {
+    if (afText) afText.textContent = `${activeF.length} aparato${activeF.length>1?'s':''} activo${activeF.length>1?'s':''} · ${Q_apto.toFixed(2)} L/s`;
+    if (dot) dot.classList.add('active');
+  } else {
+    if (afText) afText.textContent = 'Ningún aparato activo';
+    if (dot) dot.classList.remove('active');
+  }
+
+  // Status list
+  const checks = [
+    { label: `Velocidad montante: ${(Q_total/1000/(Math.PI*0.0484**2/4)).toFixed(3)} m/s`, ok: true, warn: false },
+    { label: `Presión piso 5: ${P_sel>=10?'suficiente (≥10 m)':P_sel.toFixed(1)+' m < 10 m req.'}`, ok: P_sel>=10, warn: P_sel>=7&&P_sel<10 },
+    { label: `NPSH disponible: ${NPSH.toFixed(2)} m ${NPSH>=3?'(seguro)':'(riesgo cavitación)'}`, ok: NPSH>=3, warn: false },
+    { label: `TDH: ${TDH.toFixed(2)} m ${TDH<=30?'· rango normal':'· verificar bomba'}`, ok: TDH<=30, warn: TDH>30&&TDH<=35 },
+    { label: `Tanque: ${hrsText} de autonomía`, ok: tankHrs>=3, warn: tankHrs>=1&&tankHrs<3 },
+  ];
+  const statusList = document.getElementById('status-list');
+  if (statusList) {
+    statusList.innerHTML = checks.map(c => {
+      const cls = c.ok ? 'ok' : c.warn ? 'warn' : 'bad';
+      const icon = c.ok ? '✓' : c.warn ? '⚠' : '✗';
+      return `<div class="status-item ${cls}"><span class="status-icon">${icon}</span>${c.label}</div>`;
+    }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TABLA COMPARATIVA POR PISO
+// ═══════════════════════════════════════════════════════════
+function updateFloorTable(results, pressures, cumLoss, segments) {
+  const tbody = document.getElementById('floor-tbody');
+  if (!tbody) return;
+  const v_mont = results[0].v; // velocidad en montante
+
+  tbody.innerHTML = [5,4,3,2,1].map(f => {
+    const p = pressures[f];
+    const loss = cumLoss[f];
+    const qRamal = (segments[Math.max(0, f-1)]?.Q_ls || 0);
+    const cls = f === sim.pisoSel ? ' class="selected-row"' : '';
+    const badge = p >= 10
+      ? '<span class="badge-ok">✓ OK</span>'
+      : p >= 7
+      ? '<span class="badge-warn">⚠ Baja</span>'
+      : '<span class="badge-bad">✗ Insuf.</span>';
+    return `<tr${cls}>
+      <td>Piso ${f}${f===sim.pisoSel?' ◀':''}</td>
+      <td>${Z_PISO(f).toFixed(2)}</td>
+      <td>${qRamal.toFixed(3)}</td>
+      <td>${v_mont.toFixed(3)}</td>
+      <td>${loss.toFixed(4)}</td>
+      <td>${p.toFixed(2)}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDERIZAR APARATOS
+// ═══════════════════════════════════════════════════════════
+const FIXTURE_ICONS = {
+  shower: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <path d="M4 4l2 2"/><path d="M4.93 4.93 A7 7 0 0 1 17 17"/><path d="M12 3 A9 9 0 0 1 21 12"/>
+    <line x1="9" y1="17" x2="9" y2="20"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="15" y1="17" x2="15" y2="20"/>
+    <path d="M5 17h14"/>
+  </svg>`,
+  faucet: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <path d="M5 13h10a3 3 0 0 0 3-3V9a1 1 0 0 0-1-1h-1V6a3 3 0 0 0-6 0v2H8a1 1 0 0 0-1 1v1a3 3 0 0 0-3 3v3"/>
+    <path d="M5 16v2a2 2 0 0 0 2 2h2"/>
+  </svg>`,
+  toilet: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <path d="M7 3h10v4H7z"/><path d="M7 7c0 6 10 6 10 0"/><path d="M10 7v3"/><path d="M14 7v3"/>
+    <path d="M8 17c0 2 8 2 8 0l-1-7H9z"/>
+  </svg>`,
+  kitchen: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <rect x="3" y="10" width="18" height="9" rx="2"/>
+    <path d="M12 4v6"/><path d="M10 4a2 2 0 0 1 4 0"/>
+    <circle cx="12" cy="14" r="2"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>`,
+  laundry: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <rect x="4" y="3" width="16" height="18" rx="2"/>
+    <circle cx="12" cy="13" r="4"/>
+    <line x1="8" y1="7" x2="10" y2="7"/>
+    <circle cx="14" cy="7" r="0.5" fill="currentColor"/>
+    <path d="M10 13 A2 2 0 0 1 14 13"/>
+  </svg>`,
+};
+
+function renderFixtures() {
+  const grid = document.getElementById('fixture-grid');
+  if (!grid) return;
+  grid.innerHTML = FIXTURES.map(fix => `
+    <div class="fixture-card" id="fcard-${fix.id}" onclick="toggleFixture('${fix.id}')">
+      <div class="fixture-icon">${FIXTURE_ICONS[fix.icon] || FIXTURE_ICONS.faucet}</div>
+      <div class="fixture-name">${fix.label}</div>
+      <div class="fixture-q">${fix.Q.toFixed(2)} L/s</div>
+      <div class="fixture-status" id="fstatus-${fix.id}">Cerrado</div>
+    </div>
+  `).join('');
+}
+
+function toggleFixture(id) {
+  sim.fixtures[id] = !sim.fixtures[id];
+  const card = document.getElementById(`fcard-${id}`);
+  const status = document.getElementById(`fstatus-${id}`);
+  if (card) card.classList.toggle('active', sim.fixtures[id]);
+  if (status) status.textContent = sim.fixtures[id] ? 'Abierto' : 'Cerrado';
+  scheduleUpdate();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  UTILIDADES
+// ═══════════════════════════════════════════════════════════
+function setEl(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function animVal(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.textContent !== val) {
+    el.textContent = val;
+    el.classList.remove('val-update');
+    void el.offsetWidth; // reflow to restart animation
+    el.classList.add('val-update');
+  }
+}
+
+function fmt0(n) {
+  return Math.round(n).toLocaleString('es-CO');
 }

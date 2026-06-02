@@ -3,365 +3,286 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulador Hidráulico — Edificio Residencial 5 Pisos, Bogotá</title>
-  <meta name="description" content="Simulador hidráulico para edificio residencial de 5 pisos en Bogotá D.C. Análisis de pérdidas, dimensionamiento de bomba, simulación horaria y costos.">
+  <title>Simulador Hidráulico — Edificio Residencial, Bogotá</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<!-- ══════════════════════ HEADER ══════════════════════ -->
-<header class="app-header">
-  <div class="header-icon">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <polyline points="9 22 9 12 15 12 15 22"/>
-    </svg>
+<!-- ══ TOPBAR ══════════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">Simulador Hidráulico</div>
+      <div class="brand-sub">Edificio 5 pisos · Bogotá D.C. · 2026</div>
+    </div>
   </div>
-  <div>
-    <div class="header-title">Simulador Hidráulico — Edificio Residencial</div>
-    <div class="header-sub">5 Pisos · 3 Aptos/Piso · Bogotá D.C. · Proyecto Final Fenómenos de Transporte</div>
+
+  <div class="scenario-bar">
+    <span class="scen-label">Escenario</span>
+    <button data-scenario="valle"  class="scen-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      Hora Valle
+    </button>
+    <button data-scenario="normal" class="scen-btn active">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+      Normal
+    </button>
+    <button data-scenario="pico"   class="scen-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      Hora Pico
+    </button>
   </div>
-  <div class="header-badges">
-    <span class="badge badge-blue">U. de La Sabana · Ing. Química 2026</span>
-    <span class="badge badge-teal">NTC 1500 · Condiciones Bogotá 2640 m.s.n.m.</span>
+
+  <div class="header-chips">
+    <span class="chip">NTC 1500</span>
+    <span class="chip">2 640 m.s.n.m.</span>
+    <span class="chip">15 °C</span>
   </div>
 </header>
 
-<!-- ══════════════════════ MAIN ══════════════════════ -->
-<main class="container">
+<!-- ══ MAIN GRID ═══════════════════════════════════════════ -->
+<div class="sim-wrapper">
 
-  <!-- ── Resumen del proyecto ── -->
-  <div class="card">
-    <div class="card-header open" onclick="toggleCard(this)">
-      <div class="card-number num-blue" style="font-size:18px">🏢</div>
-      <div class="card-header-text">
-        <div class="card-header-title">Parámetros del Edificio</div>
-        <div class="card-header-desc">Datos base del proyecto — todos los módulos usan estos valores</div>
+  <!-- LEFT: Controls ──────────────────────────────────────── -->
+  <aside class="panel controls-panel">
+
+    <div class="ctrl-section">
+      <div class="ctrl-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Personas por apartamento
       </div>
-      <button class="card-toggle">▲ Colapsar</button>
+      <div class="slider-wrap">
+        <input type="range" id="personas-slider" min="1" max="5" value="3" step="1" class="custom-slider">
+        <div class="slider-val-display">
+          <span id="personas-val">3</span>
+          <span class="slider-unit">personas</span>
+        </div>
+      </div>
+      <div class="slider-ticks">
+        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+      </div>
     </div>
-    <div class="card-body open" id="body-building">
-      <div class="summary-grid" id="building-summary"></div>
-      <div class="section-label" style="margin-top:20px">Esquema hidráulico del edificio</div>
-      <div id="building-schematic" style="background:white;border:1px solid var(--gray-300);border-radius:var(--r-md);padding:12px;overflow-x:auto"></div>
+
+    <div class="ctrl-section">
+      <div class="ctrl-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Piso a analizar
+      </div>
+      <div class="floor-btns">
+        <button data-floor="1" class="floor-btn">P1</button>
+        <button data-floor="2" class="floor-btn">P2</button>
+        <button data-floor="3" class="floor-btn">P3</button>
+        <button data-floor="4" class="floor-btn">P4</button>
+        <button data-floor="5" class="floor-btn active">P5</button>
+      </div>
     </div>
-  </div>
 
-  <!-- ══ Botón Ejecutar Todo ══ -->
-  <button id="run-all-btn" class="btn" onclick="runAll()"
-    style="background:linear-gradient(135deg,var(--blue-900),var(--blue-700));color:white;width:100%;padding:14px;font-size:15px;border-radius:var(--r-md);justify-content:center;gap:10px;box-shadow:0 4px 12px rgba(12,35,64,.3)">
-    ▶▶ Ejecutar Todo (HYD-1 → 4)
-    <span style="font-size:12px;opacity:.75;font-weight:400">Calcula todos los módulos con los valores por defecto</span>
-  </button>
-
-  <!-- ══ HYD-1: Pérdidas hidráulicas ══ -->
-  <div class="card" id="card-hyd1">
-    <div class="card-header open" onclick="toggleCard(this)">
-      <div class="card-number num-blue">1</div>
-      <div class="card-header-text">
-        <div class="card-header-title">HYD-1 — Análisis de Pérdidas Hidráulicas</div>
-        <div class="card-header-desc">Darcy-Weisbach + Colebrook-White por tramo · Verificación NTC 1500 (0.5–2.5 m/s)</div>
+    <div class="ctrl-section fixtures-section">
+      <div class="ctrl-label">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+        Aparatos del apartamento
+        <span class="ctrl-hint">— toca para abrir</span>
       </div>
-      <button class="card-toggle">▲ Colapsar</button>
+      <div class="fixture-grid" id="fixture-grid"></div>
+      <div class="active-flow-bar" id="active-flow-bar">
+        <div class="flow-dot"></div>
+        <span id="active-flow-text">Ningún aparato activo</span>
+      </div>
     </div>
-    <div class="card-body open" id="body-hyd1">
 
-      <div class="section-label">Propiedades del fluido (agua @ 15°C, Bogotá)</div>
-      <div class="input-row">
-        <div class="input-group">
-          <label>Densidad ρ (kg/m³)</label>
-          <input type="number" id="f-rho" value="999.1" step="0.1">
-        </div>
-        <div class="input-group">
-          <label>Viscosidad μ (Pa·s)</label>
-          <input type="number" id="f-mu" value="0.001138" step="0.000001">
-        </div>
-        <div class="input-group">
-          <label>Rugosidad PVC ε (m)</label>
-          <input type="number" id="f-eps" value="0.0000015" step="0.0000001">
-        </div>
-        <div class="input-group">
-          <label>Caudal de diseño (L/s)</label>
-          <input type="number" id="q-design" value="2.30" step="0.01">
-        </div>
+    <div class="ctrl-footer">
+      <div class="footer-stat">
+        <div class="footer-stat-val" id="q-daily-display">6 300</div>
+        <div class="footer-stat-lbl">L/día consumo</div>
       </div>
-
-      <div class="section-label">Red hidráulica — Tramos T1–T9 (punto más desfavorable: Piso 5, Apto 3, Ducha)</div>
-      <div class="table-wrap">
-        <table id="segments-table">
-          <thead>
-            <tr>
-              <th>Tramo</th>
-              <th>Descripción</th>
-              <th>D interno (mm)</th>
-              <th>Longitud (m)</th>
-              <th>Q (L/s)</th>
-              <th>ΣK accesorios</th>
-            </tr>
-          </thead>
-          <tbody id="segments-body"></tbody>
-        </table>
+      <div class="footer-stat">
+        <div class="footer-stat-val">22 680</div>
+        <div class="footer-stat-lbl">L tanque</div>
       </div>
+      <div class="footer-stat">
+        <div class="footer-stat-val">45</div>
+        <div class="footer-stat-lbl">habitantes</div>
+      </div>
+    </div>
+  </aside>
 
-      <details class="eq-details">
-        <summary>📐 Ecuaciones aplicadas (HYD-1)</summary>
-        <pre class="eq-block">Velocidad:        v = Q / A = Q / (π·D²/4)
-Reynolds:         Re = ρ·v·D / μ
-Colebrook-White:  1/√f = −2·log₁₀( ε/(3.7·D) + 2.51/(Re·√f) )   [iterativo N-R]
-  Laminar (Re&lt;2300):  f = 64/Re
-Darcy-Weisbach:   hf = f · (L/D) · v²/(2g)
-Pérdidas menores: hm = ΣK · v²/(2g)
-Total tramo:      h_t = hf + hm</pre>
-      </details>
-
-      <button class="btn btn-primary" onclick="runHyd1()">▶ Ejecutar HYD-1</button>
-      <div id="hyd1-output" style="margin-top:20px;display:none">
-        <div class="section-label">Resultados por tramo</div>
-        <div class="table-wrap" id="hyd1-results-wrap"></div>
-        <div id="hyd1-alerts"></div>
-        <div class="chart-container">
-          <div class="chart-title">Pérdidas por tramo (m columna de agua)</div>
-          <div id="hyd1-chart-bars"></div>
-        </div>
-        <div class="chart-container">
-          <div class="chart-title">Línea de gradiente hidráulico (presión disponible desde bomba)</div>
-          <div id="hyd1-chart-gradient"></div>
+  <!-- CENTER: Building ──────────────────────────────────── -->
+  <main class="panel building-panel">
+    <div class="building-header">
+      <div class="bh-left">
+        <div class="bh-title">Red de distribución hidráulica</div>
+        <div class="bh-sub">Edificio residencial · 5 pisos · 3 apartamentos/piso</div>
+      </div>
+      <div class="bh-right">
+        <div class="live-q">
+          <div class="live-q-val" id="live-q">—</div>
+          <div class="live-q-unit">L/s sistema</div>
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ══ HYD-2: Bomba ══ -->
-  <div class="card" id="card-hyd2">
-    <div class="card-header" onclick="toggleCard(this)">
-      <div class="card-number num-teal">2</div>
-      <div class="card-header-text">
-        <div class="card-header-title">HYD-2 — Dimensionamiento de Bomba</div>
-        <div class="card-header-desc">Cabeza dinámica total (TDH) · Potencia al freno · NPSH disponible · Selección comercial</div>
-      </div>
-      <button class="card-toggle">▼ Expandir</button>
+    <div class="svg-wrap">
+      <svg id="building-svg" viewBox="0 0 400 540" preserveAspectRatio="xMidYMid meet" style="--flow-spd:1s">
+        <!-- Populated by JS -->
+      </svg>
     </div>
-    <div class="card-body" id="body-hyd2">
+    <div class="building-legend">
+      <div class="leg-item"><div class="leg-line cyan"></div><span>Montante principal</span></div>
+      <div class="leg-item"><div class="leg-line cyan dim"></div><span>Derivación piso</span></div>
+      <div class="leg-item"><div class="leg-dot selected"></div><span>Piso seleccionado</span></div>
+      <div class="leg-item"><div class="leg-dot danger"></div><span>Punto desfavorable</span></div>
+    </div>
+  </main>
 
-      <div class="input-row">
-        <div class="input-group">
-          <label>Altura estática Δz (m)</label>
-          <input type="number" id="p-dz" value="16.70" step="0.01">
-        </div>
-        <div class="input-group">
-          <label>Presión req. piso 5 (m.c.a.)</label>
-          <input type="number" id="p-req" value="10.0" step="0.1">
-        </div>
-        <div class="input-group">
-          <label>Eficiencia bomba η</label>
-          <input type="number" id="p-eta" value="0.65" step="0.01" min="0.1" max="1">
-        </div>
+  <!-- RIGHT: Metrics ───────────────────────────────────── -->
+  <aside class="panel metrics-panel">
+
+    <div class="metric-card" id="mc-tank">
+      <div class="mc-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 20v-8l3 3 3-3v8"/></svg>
+        Tanque de almacenamiento
       </div>
-      <div class="input-row">
-        <div class="input-group">
-          <label>Δz succión (m, + si tanque arriba)</label>
-          <input type="number" id="p-dz-succ" value="0.0" step="0.1">
-        </div>
-        <div class="input-group">
-          <label>Pérdidas en succión (m)</label>
-          <input type="number" id="p-hf-succ" value="0.20" step="0.01">
-        </div>
-        <div class="input-group">
-          <label>Pérd. totales del sistema (m) <span style="color:var(--blue-500)">[auto-HYD1]</span></label>
-          <input type="number" id="p-losses" value="0" step="0.01">
-        </div>
-      </div>
-
-      <details class="eq-details">
-        <summary>📐 Ecuaciones aplicadas (HYD-2)</summary>
-        <pre class="eq-block">TDH = Δz + Σhf + Σhm + P_req
-  donde P_req = presión mínima requerida en punto de entrega [m c.a.]
-
-P_hidráulica = Q · ρ · g · TDH                              [W]
-P_freno = P_hid / η                                          [W]  →  ÷ 745.7 = HP
-
-NPSH_d = P_atm/(ρ·g) + Δz_succ − hf_succ − P_vapor/(ρ·g)  [m]
-  Bogotá: P_atm = 74,660 Pa → 7.61 m c.a.
-  Agua 15°C: P_vapor = 1,705 Pa → 0.174 m c.a.</pre>
-      </details>
-
-      <button class="btn btn-teal" onclick="runHyd2()">▶ Ejecutar HYD-2</button>
-      <div id="hyd2-output" style="margin-top:20px;display:none">
-        <div id="hyd2-kpis" class="kpi-grid"></div>
-        <div id="hyd2-alerts"></div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:16px">
-          <div class="chart-container" style="flex:1;min-width:260px">
-            <div class="chart-title">Desglose del TDH</div>
-            <div id="hyd2-chart-donut"></div>
+      <div class="tank-gauge">
+        <div class="tank-visual">
+          <div class="tank-track">
+            <div class="tank-fill-bar" id="tank-bar" style="height:80%"></div>
+            <div class="tank-level-line" id="tank-line" style="bottom:80%"></div>
           </div>
-          <div id="hyd2-pump-card" style="flex:1;min-width:260px"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ HYD-3: Simulación horaria + válvulas ══ -->
-  <div class="card" id="card-hyd3">
-    <div class="card-header" onclick="toggleCard(this)">
-      <div class="card-number num-green">3</div>
-      <div class="card-header-text">
-        <div class="card-header-title">HYD-3 — Simulación Horaria &amp; Control de Válvulas</div>
-        <div class="card-header-desc">Caudal y presión por franja horaria · Válvulas interactivas por piso en tiempo real</div>
-      </div>
-      <button class="card-toggle">▼ Expandir</button>
-    </div>
-    <div class="card-body" id="body-hyd3">
-
-      <div class="input-row">
-        <div class="input-group">
-          <label>TDH bomba (m) <span style="color:var(--blue-500)">[auto-HYD2]</span></label>
-          <input type="number" id="h3-tdh" value="0" step="0.1">
-        </div>
-        <div class="input-group">
-          <label>Consumo diario edificio (L/día)</label>
-          <input type="number" id="h3-qdaily" value="6300" step="100">
-        </div>
-        <div class="input-group">
-          <label>Presión mín. requerida (m.c.a.)</label>
-          <input type="number" id="h3-pmin" value="10.0" step="0.1">
-        </div>
-      </div>
-
-      <div class="section-label">Distribución horaria de consumo</div>
-      <div class="table-wrap">
-        <table id="hourly-table">
-          <thead>
-            <tr>
-              <th>Franja horaria</th>
-              <th>Horas</th>
-              <th>Duración (h)</th>
-              <th>% Consumo</th>
-              <th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody id="hourly-body"></tbody>
-        </table>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <span id="hourly-pct-badge" class="pct-badge pct-ok">Σ = 100%</span>
-        <span style="font-size:12px;color:var(--gray-500)">La suma de porcentajes debe ser exactamente 100%.</span>
-      </div>
-
-      <details class="eq-details">
-        <summary>📐 Ecuaciones aplicadas (HYD-3)</summary>
-        <pre class="eq-block">Q_franja = (% × Q_diario) / (duración_h × 3600)              [L/s promedio]
-Pérdidas(Q) = Pérdidas_ref × (Q/Q_ref)²                      [escalado cuadrático, régimen turbulento]
-P_piso5 = TDH_bomba − Δz − Pérdidas(Q)                       [m c.a.]
-Estado: ✓ si P_piso5 ≥ P_mín_requerida (10 m c.a.)</pre>
-      </details>
-
-      <button class="btn btn-green" onclick="runHyd3()">▶ Ejecutar HYD-3</button>
-      <div id="hyd3-output" style="margin-top:20px;display:none">
-        <div class="chart-container">
-          <div class="chart-title">Caudal (L/s) y Presión en Piso 5 (m.c.a.) por franja horaria</div>
-          <div id="hyd3-chart"></div>
-        </div>
-        <div class="table-wrap" id="hyd3-results-wrap" style="margin-top:16px"></div>
-
-        <div class="section-label" style="margin-top:24px">Control interactivo de válvulas por piso</div>
-        <div class="alert alert-info">
-          Ajuste la apertura de cada válvula de derivación y observe el efecto en pérdidas y presión disponible por piso en tiempo real.
-        </div>
-        <div class="valve-panel">
-          <div style="display:grid;grid-template-columns:80px 1fr 60px 90px 90px;gap:10px;padding:0 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-500)">
-            <span>Piso</span><span>Apertura válvula</span><span>%</span><span>Q (L/s)</span><span>P (m.c.a.)</span>
-          </div>
-          <div id="valve-rows"></div>
-        </div>
-        <div id="valve-chart-wrap" class="chart-container" style="margin-top:12px">
-          <div class="chart-title">Distribución de presión por piso según apertura de válvulas</div>
-          <div id="valve-chart"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ HYD-4: Costos ══ -->
-  <div class="card" id="card-hyd4">
-    <div class="card-header" onclick="toggleCard(this)">
-      <div class="card-number num-orange">4</div>
-      <div class="card-header-text">
-        <div class="card-header-title">HYD-4 — Estimación de Costos</div>
-        <div class="card-header-desc">Precios Colombia 2024-2025 (COP) · Tuberías, accesorios, bomba, tanque, mano de obra</div>
-      </div>
-      <button class="card-toggle">▼ Expandir</button>
-    </div>
-    <div class="card-body" id="body-hyd4">
-
-      <div class="section-label">Base de precios (editable)</div>
-      <div class="table-wrap">
-        <table id="prices-table">
-          <thead>
-            <tr><th>Ítem</th><th>Unidad</th><th>Precio (COP)</th><th>Cantidad default</th></tr>
-          </thead>
-          <tbody id="prices-body"></tbody>
-        </table>
-      </div>
-
-      <div class="input-row" style="margin-top:8px">
-        <div class="input-group">
-          <label>HP bomba seleccionada <span style="color:var(--blue-500)">[auto-HYD2]</span></label>
-          <input type="number" id="h4-pump-hp" value="0" step="0.25">
-        </div>
-        <div class="input-group">
-          <label>Puntos de agua totales</label>
-          <input type="number" id="h4-points" value="105" step="1">
-        </div>
-      </div>
-
-      <button class="btn btn-orange" onclick="runHyd4()">▶ Ejecutar HYD-4</button>
-      <div id="hyd4-output" style="margin-top:20px;display:none">
-        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-          <div style="flex:2;min-width:280px">
-            <div class="table-wrap" id="hyd4-results-wrap"></div>
-          </div>
-          <div style="flex:1;min-width:240px">
-            <div class="chart-container">
-              <div class="chart-title">Distribución del costo</div>
-              <div id="hyd4-chart-donut"></div>
-            </div>
+          <div class="tank-labels">
+            <span class="tank-top-lbl">22 680 L</span>
+            <span class="tank-bot-lbl">0</span>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px" id="hyd4-totals"></div>
+        <div class="tank-stats">
+          <div class="tank-pct" id="tank-pct">—</div>
+          <div class="tank-vol" id="tank-vol">— L disponibles</div>
+          <div class="tank-time" id="tank-hrs">— horas de reserva</div>
+        </div>
       </div>
     </div>
+
+    <div class="metric-card" id="mc-pump">
+      <div class="mc-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        Bomba centrífuga
+        <div class="pump-status-dot" id="pump-dot"></div>
+      </div>
+      <div class="pump-label" id="pump-label">—</div>
+      <div class="pump-grid">
+        <div class="pump-item">
+          <div class="pump-val" id="tdh-val">—</div>
+          <div class="pump-lbl">TDH (m)</div>
+        </div>
+        <div class="pump-item">
+          <div class="pump-val" id="power-kw">—</div>
+          <div class="pump-lbl">Potencia (kW)</div>
+        </div>
+        <div class="pump-item">
+          <div class="pump-val" id="power-hp">—</div>
+          <div class="pump-lbl">HP requeridos</div>
+        </div>
+        <div class="pump-item">
+          <div class="pump-val" id="npsh-val">—</div>
+          <div class="pump-lbl">NPSH disp. (m)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card" id="mc-pressure">
+      <div class="mc-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22V12M12 12L8 8M12 12l4-4M3 20l4-4M17 20l4-4"/></svg>
+        Presión — <span id="sel-floor-lbl">Piso 5</span>
+      </div>
+      <div class="pressure-arc-wrap">
+        <svg class="pressure-arc" viewBox="0 0 120 70" id="pressure-arc-svg">
+          <path d="M10 65 A 50 50 0 0 1 110 65" fill="none" stroke="#21262d" stroke-width="8" stroke-linecap="round"/>
+          <path id="pressure-arc-fill" d="M10 65 A 50 50 0 0 1 110 65" fill="none" stroke="#22d3ee" stroke-width="8" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="60"/>
+          <text x="60" y="52" text-anchor="middle" fill="#e6edf3" font-size="18" font-weight="700" font-family="Outfit,sans-serif" id="pressure-arc-val">—</text>
+          <text x="60" y="64" text-anchor="middle" fill="#6e7681" font-size="8" font-family="Outfit,sans-serif">m columna agua</text>
+        </svg>
+      </div>
+      <div class="pressure-status" id="pressure-status"></div>
+      <div class="pressure-ref">Mínimo requerido: 10 m</div>
+    </div>
+
+    <div class="metric-card" id="mc-losses">
+      <div class="mc-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Pérdidas hidráulicas
+      </div>
+      <div class="loss-rows">
+        <div class="loss-row">
+          <div class="loss-name">
+            <div class="loss-dot" style="background:#388bfd"></div>
+            Fricción Σhf
+          </div>
+          <div class="loss-bar-wrap">
+            <div class="loss-bar" id="loss-bar-hf" style="width:60%;background:#388bfd"></div>
+          </div>
+          <div class="loss-val" id="loss-hf">—</div>
+          <div class="loss-unit">m</div>
+        </div>
+        <div class="loss-row">
+          <div class="loss-name">
+            <div class="loss-dot" style="background:#d29922"></div>
+            Menores Σhm
+          </div>
+          <div class="loss-bar-wrap">
+            <div class="loss-bar" id="loss-bar-hm" style="width:40%;background:#d29922"></div>
+          </div>
+          <div class="loss-val" id="loss-hm">—</div>
+          <div class="loss-unit">m</div>
+        </div>
+        <div class="loss-total-row">
+          <span>Total del sistema</span>
+          <span class="loss-total-val" id="loss-total">—</span>
+          <span class="loss-unit">m</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="metric-card" id="mc-status">
+      <div class="mc-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Estado del sistema
+      </div>
+      <div class="status-list" id="status-list"></div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- ══ FLOOR COMPARISON ═══════════════════════════════════ -->
+<details class="floor-compare">
+  <summary>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Comparación de presión por piso
+  </summary>
+  <div class="compare-table-wrap">
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Piso</th>
+          <th>Elevación (m)</th>
+          <th>Q ramal (L/s)</th>
+          <th>v montante (m/s)</th>
+          <th>Pérd. acum. (m)</th>
+          <th>Presión disp. (m)</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="floor-tbody"></tbody>
+    </table>
   </div>
-
-  <!-- ══ Exportar resultados ══ -->
-  <div class="card" id="card-export">
-    <div class="card-header" onclick="toggleCard(this)">
-      <div class="card-number num-blue" style="font-size:18px">📋</div>
-      <div class="card-header-text">
-        <div class="card-header-title">Exportar Resultados</div>
-        <div class="card-header-desc">Texto formateado listo para pegar en el informe Word</div>
-      </div>
-      <button class="card-toggle">▼ Expandir</button>
-    </div>
-    <div class="card-body" id="body-export">
-      <div id="export-section">
-        <button class="btn btn-export" onclick="doExport()">
-          📋 Generar &amp; Copiar Resultados al Portapapeles
-        </button>
-        <textarea id="export-text" readonly placeholder="Ejecuta HYD-1 y HYD-2 primero…"></textarea>
-      </div>
-    </div>
-  </div>
-
-</main>
-
-<!-- ══════════════════════ FOOTER ══════════════════════ -->
-<footer class="app-footer">
-  <strong>Diseño Hidráulico · Fenómenos de Transporte · Ingeniería Química</strong><br>
-  M.A. Casas · L.F. Lasso · I.D. Lora · N. Valencia — Universidad de La Sabana, Bogotá D.C. · 2026
-</footer>
+</details>
 
 <script src="js/engine.js"></script>
 <script src="js/app.js"></script>
